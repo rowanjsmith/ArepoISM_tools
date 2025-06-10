@@ -124,39 +124,39 @@ with additional physics).
     following.
 
     FOR AREPO 1:
-    >    ifeq (\$(SYSTYPE), "cosma")
-    >        CC       =  mpicc
-    >        FC       =  mpif90 -nofor-main
-    >        OPTIMIZE =  -std=c99 -O2 -g -DH5_USE_16_API
-    >        GSL_INCL =
-    >        GSL_LIBS =  -lgsl
-    >        FFTW_INCL=
-    >        FFTW_LIBS=  -lfftw
-    >        HDF5INCL =  -DH5_USE_16_API
-    >        HDF5LIB  =  -lhdf5
-    >        MPICHLIB = -lmpi
-    >        HWLOC_INCL= -I/usr/include
-    >        HWLOC_LIB = \$(LDFLAGS) -lhwloc
-    >        LINKER   = \$(FC)
-    >    endif
+    > ifeq ( \$(SYSTYPE), "cosma")
+    >     CC       =  mpicc
+    >     FC       =  mpif90 -nofor-main
+    >     OPTIMIZE =  -std=c99 -O2 -g -DH5_USE_16_API
+    >     GSL_INCL =
+    >     GSL_LIBS =  -lgsl
+    >     FFTW_INCL=
+    >     FFTW_LIBS=  -lfftw
+    >     HDF5INCL =  -DH5_USE_16_API
+    >     HDF5LIB  =  -lhdf5
+    >     MPICHLIB = -lmpi
+    >     HWLOC_INCL= -I/usr/include
+    >     HWLOC_LIB = \$(LDFLAGS) -lhwloc
+    >     LINKER   = \$(FC)
+    > endif
 
     FOR AREPO 2:
-    >    ifeq (\$(SYSTYPE), "cosma")
-    >        CC       = mpicc
-    >        CPPC     = mpicxx -std=c++11
-    >        FC       = mpif90 -nofor-main
-    >        OPTIMIZE = -g -O2 -DH5_USE_16_API
-    >        GSL_INCL =
-    >        GSL_LIBS =  -lgsl
-    >        FFTW_INCL=
-    >        FFTW_LIBS=  -lfftw
-    >        HDF5INCL =  -DH5_USE_16_API
-    >        HDF5LIB  =  -lhdf5
-    >        MPICHLIB = -lmpi
-    >        HWLOC_INCL= -I/usr/include
-    >        HWLOC_LIB = \$(LDFLAGS) -lhwloc
-    >        LINKER   = \$(FC)
-    >    endif
+    > ifeq ( \$(SYSTYPE), "cosma")
+    >     CC       = mpicc
+    >     CPPC     = mpicxx -std=c++11
+    >     FC       = mpif90 -nofor-main
+    >     OPTIMIZE = -g -O2 -DH5_USE_16_API
+    >     GSL_INCL =
+    >     GSL_LIBS =  -lgsl
+    >     FFTW_INCL=
+    >     FFTW_LIBS=  -lfftw
+    >     HDF5INCL =  -DH5_USE_16_API
+    >     HDF5LIB  =  -lhdf5
+    >     MPICHLIB = -lmpi
+    >     HWLOC_INCL= -I/usr/include
+    >     HWLOC_LIB = \$(LDFLAGS) -lhwloc
+    >     LINKER   = \$(FC)
+    > endif
     
 4.  Purge existing modules then load the required modules on COSMA:
     >    module purge # purge all existing modules
