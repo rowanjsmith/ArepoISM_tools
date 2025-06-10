@@ -1,8 +1,4 @@
-----------------------------------------------------------------------------------------------------
-Last edited: 10 Jun 2025
-----------------------------------------------------------------------------------------------------
-
-Welcome to the weird and wonderful world of AREPO on COSMA!
+# Welcome to the weird and wonderful world of AREPO on COSMA!
 
 This guide will help you avoid issues commonly encountered in setting up you first AREPO simulations.
 It assumes that you have access to the AREPO repository (or that you have access to a local copy) 
@@ -39,20 +35,20 @@ These tools are currently designed to work with HDF5 outputs, but can be modifie
 binary outputs if necessary.
 
 ----------------------------------------------------------------------------------------------------
-I. GET ACCESS TO AREPO
+# I. GET ACCESS TO AREPO
 
 To get access to the AREPO repository from bitbucket using SSH, first go to 
 https://bitbucket.org/account/settings/ssh-keys/ 
 and add your *public* SSH key (usually ~/.ssh/id_rsa.pub). If you can't find the key or the .ssh 
 directory does not exist in your COSMA home directory, you might have to generate a key pair using: 
-$ ssh-keygen
+> $ ssh-keygen
 
 Once you have added your public SSH key to your bitbucket account, go to your chosen host directory
 (e.g. your home directory: ~) then clone the AREPO repository:
-$ git clone git@bitbucket.org:volkerspringel/arepo.git
+> $ git clone git@bitbucket.org:volkerspringel/arepo.git
 
 And checkout your chosen branch:
-$ git checkout <branch_name>
+> $ git checkout <branch_name>
 
 You can find the status of any branch relative to the main (or 'master') branch on bitbucket:
 https://bitbucket.org/volkerspringel/arepo/branches/
@@ -64,7 +60,7 @@ If using AREPO 2, the Arepo2 branch should work for most configuration (includin
 with additional physics).
 
 ----------------------------------------------------------------------------------------------------
-II. COMPILE AREPO
+# II. COMPILE AREPO
 
 1.  From your host directory (e.g. ~/arepo), find and edit the Template-Config.sh file to enable the 
     configuration options you require and disable the configuration options you do not require. 
@@ -121,78 +117,78 @@ II. COMPILE AREPO
         SF_ECOGAL_FEEDBACK_PHOTOION
 
 2.  Uncomment the following line in Makefile.systype:
-        SYSTYPE="cosma"
+    >    SYSTYPE="cosma"
     Make sure all other lines are commented out (ie. starting with #)
 
 3.  In makefiles/systypes.make, make sure the compile options for SYSTYPE "cosma" matches the 
     following.
 
     FOR AREPO 1:
-        ifeq ($(SYSTYPE), "cosma")
-            CC       =  mpicc
-            FC       =  mpif90 -nofor-main
-            OPTIMIZE =  -std=c99 -O2 -g -DH5_USE_16_API
-            GSL_INCL =
-            GSL_LIBS =  -lgsl
-            FFTW_INCL=
-            FFTW_LIBS=  -lfftw
-            HDF5INCL =  -DH5_USE_16_API
-            HDF5LIB  =  -lhdf5
-            MPICHLIB = -lmpi
-            HWLOC_INCL= -I/usr/include
-            HWLOC_LIB = $(LDFLAGS) -lhwloc
-            LINKER   = $(FC)
-        endif
+    >    ifeq ($(SYSTYPE), "cosma")
+    >        CC       =  mpicc
+    >        FC       =  mpif90 -nofor-main
+    >        OPTIMIZE =  -std=c99 -O2 -g -DH5_USE_16_API
+    >        GSL_INCL =
+    >        GSL_LIBS =  -lgsl
+    >        FFTW_INCL=
+    >        FFTW_LIBS=  -lfftw
+    >        HDF5INCL =  -DH5_USE_16_API
+    >        HDF5LIB  =  -lhdf5
+    >        MPICHLIB = -lmpi
+    >        HWLOC_INCL= -I/usr/include
+    >        HWLOC_LIB = $(LDFLAGS) -lhwloc
+    >        LINKER   = $(FC)
+    >    endif
 
     FOR AREPO 2:
-        ifeq ($(SYSTYPE), "cosma")
-            CC       = mpicc
-            CPPC     = mpicxx -std=c++11
-            FC       = mpif90 -nofor-main
-            OPTIMIZE = -g -O2 -DH5_USE_16_API
-            GSL_INCL =
-            GSL_LIBS =  -lgsl
-            FFTW_INCL=
-            FFTW_LIBS=  -lfftw
-            HDF5INCL =  -DH5_USE_16_API
-            HDF5LIB  =  -lhdf5
-            MPICHLIB = -lmpi
-            HWLOC_INCL= -I/usr/include
-            HWLOC_LIB = $(LDFLAGS) -lhwloc
-            LINKER   = $(FC)
-        endif
+    >    ifeq ($(SYSTYPE), "cosma")
+    >        CC       = mpicc
+    >        CPPC     = mpicxx -std=c++11
+    >        FC       = mpif90 -nofor-main
+    >        OPTIMIZE = -g -O2 -DH5_USE_16_API
+    >        GSL_INCL =
+    >        GSL_LIBS =  -lgsl
+    >        FFTW_INCL=
+    >        FFTW_LIBS=  -lfftw
+    >        HDF5INCL =  -DH5_USE_16_API
+    >        HDF5LIB  =  -lhdf5
+    >        MPICHLIB = -lmpi
+    >        HWLOC_INCL= -I/usr/include
+    >        HWLOC_LIB = $(LDFLAGS) -lhwloc
+    >        LINKER   = $(FC)
+    >    endif
     
 4.  Purge existing modules then load the required modules on COSMA:
-        # Purge all existing modules
-        module purge
+    >    # Purge all existing modules
+    >    module purge
 
-        # Load the following modules
-        module load intel_comp/2024.2.0
-        module load compiler-rt tbb compiler mpi
-        module load gsl/2.8
-        module load fftw/3.3.10cosma8 
-        module load hdf5/1.14.4
-        module load cosma/2024 # cosma/2018
-        module load python/3.12.4
-        module load armforge/23.1.0
-        module load hdfview/3.3.2 # hdfview/3.1.4 
-        module load gadgetviewer/1.1.4
-        module load utils/202402
-        module load hwloc/2.11.1
-        module load allinea/ddt/23.1.0
+    >    # Load the following modules
+    >    module load intel_comp/2024.2.0
+    >    module load compiler-rt tbb compiler mpi
+    >    module load gsl/2.8
+    >    module load fftw/3.3.10cosma8 
+    >    module load hdf5/1.14.4
+    >    module load cosma/2024 # cosma/2018
+    >    module load python/3.12.4
+    >    module load armforge/23.1.0
+    >    module load hdfview/3.3.2 # hdfview/3.1.4 
+    >    module load gadgetviewer/1.1.4
+    >    module load utils/202402
+    >    module load hwloc/2.11.1
+    >    module load allinea/ddt/23.1.0
 
     (You can copy this into a bash file (e.g. load_modules.sh) and run it using ./load_modules.sh)
 
 5.  Clean existing build files using:
-    $ make clean
+    > $ make clean
 
 6.  Compile AREPO using:
-    $ make CONFIG=<your_config_file.sh> EXEC=<your_executable_name>
+    > $ make CONFIG=<your_config_file.sh> EXEC=<your_executable_name>
     This will generate many warnings, but hopefully no errors. If compilation is successful, you 
     will find your executable in the current directory.
 
 ----------------------------------------------------------------------------------------------------
-III. RUN AREPO
+# III. RUN AREPO
 
 In your data directory (typically "/cosma8/data/<project_ID>/<user_ID>/"), create a new directory to 
 run AREPO from, or copy the example directory found here:
@@ -216,24 +212,24 @@ Go through the batchsub file to specify your batch job submission options. Read 
 file for information about each option.
 
 Once the parameters and batchsub options have been set, you can submit your batch job using:
-    $ sbatch batchsub
+>    $ sbatch batchsub
 
 To find your job in the queue and check its status, use:
-    $ squeue --me
+>    $ squeue --me
 
 This will show you the following information:
-    -   JOBID is your job identifier. This can be used to cancel your job if submitted by mistake 
+-   JOBID is your job identifier. This can be used to cancel your job if submitted by mistake 
         using: "scancel <JOBID>". Make sure you have the correct job ID before using this command.
-    -   PARTITION is where the job is/will be running. If you are on COSMA8, this should be "cosma8".
-    -   NAME is the job name you specified in the batchsub file using "-J".
-    -   USER is the user who submitted the job. This should be your user name.
-    -   ST is the status of the job. 'PD' stands for pending, indicating that you job is in the 
+-   PARTITION is where the job is/will be running. If you are on COSMA8, this should be "cosma8".
+-   NAME is the job name you specified in the batchsub file using "-J".
+-   USER is the user who submitted the job. This should be your user name.
+-   ST is the status of the job. 'PD' stands for pending, indicating that you job is in the 
         queue, while 'R' stands for running. 
-    -   TIME is the amount of time your job has been running for. It will start when you job status
+-   TIME is the amount of time your job has been running for. It will start when you job status
         changes from 'PD' to 'R'. If present, the prefix indicates the number of days (e.g. 
         2-01:00:00 means your job has been running for 2 days and 1 hour).
-    -   NODES is the number of nodes allocated to your job. One node has 128 processors (ntasks).
-    -   NODELIST (REASON) lists either the node ID(s) allocated to your job if it is running, or
+-   NODES is the number of nodes allocated to your job. One node has 128 processors (ntasks).
+-   NODELIST (REASON) lists either the node ID(s) allocated to your job if it is running, or
         it indicates the reason your job is pending (e.g. "(Resources)" or "(Priority)")
         
 If the "squeue --me" command does not show anything, it either means your job has terminated 
@@ -268,11 +264,12 @@ determined from the literature, search for the parameter name in the codebase to
 is used.
 
 ----------------------------------------------------------------------------------------------------
-IV. READ AND ANALYSE AREPO OUTPUTS
+# IV. READ AND ANALYSE AREPO OUTPUTS
 
 Coming soon to a ~~movie theatre~~ repository near you...
 
 ----------------------------------------------------------------------------------------------------
 
-Written by Zoe Faes (zf28[at]st-andrews.ac.uk) with wisdom from Rowan Smith, Sansith Hewapathirana, 
-David Whitworth, Kammy Bogue, Philipp Girichidis, Robin Tress, Junia Goeller and Ruediger Pakmor.
+Written by Zoe Faes with wisdom from Rowan Smith, Sansith Hewapathirana, David Whitworth, 
+Kammy Bogue, Philipp Girichidis, Robin Tress, Junia Goeller and Ruediger Pakmor.
+Last edited: 10 Jun 2025
