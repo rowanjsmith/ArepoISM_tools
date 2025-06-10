@@ -1,0 +1,121 @@
+%   Relevant files
+InitCondFile  	                        ./snapshots/new_example_galaxy-with-grid
+OutputDir                               snapshots
+SnapshotFileBase                        example_galaxy
+
+%   CPU-time limit
+TimeLimitCPU                            2556000     % 71 hours to enable automatic restart
+ResubmitOn                              0           %
+ResubmitCommand                         xyz         %
+MaxMemSize                              8000        %
+
+%   Code options
+ICFormat                                3           %
+SnapFormat                              3           %
+NumFilesPerSnapshot                     1           %
+MaxFilesWithConcurrentIO                1           %
+
+BoxSize                                 1000        %
+GridSize                                16          %
+
+PeriodicBoundariesOn                    0           %
+ComovingIntegrationOn                   0           %
+CoolingOn                               0           %
+StarformationOn                         0           %
+ 
+%   Caracteristics of run
+TimeBegin                               0           % z=50
+TimeMax	                                2.5         % end at z=0
+
+Omega0	                                0.0         % total matter density
+OmegaLambda                             0.0         %
+OmegaBaryon                             0.0         %
+HubbleParam                             1.0         % only needed for cooling
+
+%   Softening lengths
+GasSoftFactor                           2.          %
+
+ActivePartFracForNewDomainDecomp        0.1         %
+
+MinimumComovingHydroSoftening           0.001       %
+AdaptiveHydroSofteningSpacing           1.15        %
+
+SofteningComovingType0                  0.01        %
+SofteningComovingType1                  1.0         %
+SofteningComovingType2                  3.0         %
+SofteningComovingType3                  30.0        %
+SofteningComovingType4                  0.05        %
+SofteningComovingType5                  0.025       %
+
+SofteningMaxPhysType0                   0.01        %
+SofteningMaxPhysType1                   1.0         %
+SofteningMaxPhysType2                   3.0         %
+SofteningMaxPhysType3                   30.0        %
+SofteningMaxPhysType4                   0.05        %
+SofteningMaxPhysType5                   0.025       %
+
+SofteningTypeOfPartType0                0           %
+SofteningTypeOfPartType1                2           %
+SofteningTypeOfPartType2                1           %
+SofteningTypeOfPartType3                1           %
+SofteningTypeOfPartType4                4           %
+SofteningTypeOfPartType5                5           %
+
+%   Output frequency
+OutputListOn                            0           %
+OutputListFilename                      outputs.txt %
+
+TimeBetSnapshot                         0.005       %
+TimeOfFirstSnapshot                     0.          %
+CpuTimeBetRestartFile                   5400        % every 1.5 hours
+TimeBetStatistics                       0.1         %
+
+%   Accuracy of time integration
+TypeOfTimestepCriterion                 0           %
+ErrTolIntAccuracy                       0.05        %
+MaxSizeTimestep                         0.0001      %
+MinSizeTimestep                         0.          %
+NumberOfGlobalTimestepsToStopAfter      100000      %
+
+%   Tree algorithm and force accuracy
+ErrTolTheta                             0.5         %
+TypeOfOpeningCriterion                  1           %
+ErrTolForceAcc                          0.015       %
+
+%   Parameters of SPH
+DesNumNgb                               64          %
+MaxNumNgbDeviation                      2           %
+InitGasTemp                             40.0        % initial gas temperature in K, only used if not given in IC file
+MinGasTemp                              3.0         %
+CourantFac                              0.3         %
+
+IsoSoundSpeed                           10          %
+
+%   Further code parameters
+
+%   Domain parameters
+MultipleDomains		                    16          %
+TopNodeFactor		                    4           %
+
+%   System of units
+UnitLength_in_cm                        3.0856e+20  % 100 pc 
+UnitMass_in_g                           1.991E33    % 1 solar masses
+UnitVelocity_in_cm_per_s                1.0e+5      % 1 km/sec
+GravityConstantInternal                 0           %
+
+%   Prescribed Minima
+LimitUBelowThisDensity                  0           %
+LimitUBelowCertainDensityToThisValue    0           %
+MinimumDensityOnStartUp                 1.0e-10     %
+MinEgySpec	                            0           %
+
+%   Mesh Construction Constraints
+CellMaxAngleFactor	                    2.0         %
+CellShapingSpeed	                    0.8         %
+ReferenceGasPartMass                    2000.       %       
+TargetGasMassFactor                     1.0         % gas mass below which REFINEMENT_HIGH_RES_GAS is applied
+RefinementCriterion                     1           %
+DerefinementCriterion                   1           %
+MaxVolumeDiff                           8.          %
+MinVolume                               1.e-8       %
+MaxVolume                               1000.       %

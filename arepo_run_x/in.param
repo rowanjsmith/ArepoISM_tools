@@ -1,0 +1,213 @@
+%   Relevant files
+InitCondFile  	                        ./snapshots/<initial_conditions>    % replace with path to initial condition file (or initial snapshot)
+OutputDir                               snapshots                           % name of output directory
+SnapshotFileBase                        <sim_name>                          % name of simulation
+
+%   CPU-time limit
+TimeLimitCPU                            2556000     % 71 hours to enable automatic restart
+ResubmitOn                              0           %
+ResubmitCommand                         xyz         %
+MaxMemSize                              8000        % memory allocation in MB for each task (total memory allocation = MaxMemSize * ntasks)
+
+%   Code options
+ICFormat                                3           % 1 = binary, 3 = HDF5
+SnapFormat                              3           % 1 = binary, 3 = HDF5
+NumFilesPerSnapshot                     1           %
+MaxFilesWithConcurrentIO                1           %
+
+BoxSize                                 1000        % in code units
+
+PeriodicBoundariesOn                    0           % refers only to gravitational boundary conditions, not box boundary conditions.
+ComovingIntegrationOn                   0           % should be set to 0 for galactic simulations
+CoolingOn                               0           % superseeded by TreeCol and/or Sweep
+StarformationOn                         0           % superseeded by SF_ECOGAL and/or sink particles
+ 
+%   Caracteristics of run
+TimeBegin                               0           % start simulation at this time in code units (typically set to 0 for galactic runs)
+TimeMax	                                2.5         % end simulation at this time in code units
+
+Omega0	                                0.0         % total matter density
+OmegaLambda                             0.0         %
+OmegaBaryon                             0.0         %
+HubbleParam                             1.0         % only needed for cooling
+
+%   Softening lengths
+GasSoftFactor                           2.          %
+
+ActivePartFracForNewDomainDecomp        0.1         %
+
+MinimumComovingHydroSoftening           0.001       %
+AdaptiveHydroSofteningSpacing           1.15        %
+
+SofteningComovingType0                  0.01        %
+SofteningComovingType1                  1.0         %
+SofteningComovingType2                  3.0         %
+SofteningComovingType3                  30.0        %
+SofteningComovingType4                  0.05        %
+SofteningComovingType5                  0.025       %
+
+SofteningMaxPhysType0                   0.01        %
+SofteningMaxPhysType1                   1.0         %
+SofteningMaxPhysType2                   3.0         %
+SofteningMaxPhysType3                   30.0        %
+SofteningMaxPhysType4                   0.05        %
+SofteningMaxPhysType5                   0.025       %
+
+SofteningTypeOfPartType0                0           %
+SofteningTypeOfPartType1                2           %
+SofteningTypeOfPartType2                1           %
+SofteningTypeOfPartType3                1           %
+SofteningTypeOfPartType4                4           %
+SofteningTypeOfPartType5                5           %
+
+%   Output frequency
+OutputListOn                            0           %
+OutputListFilename                      outputs.txt %
+
+TimeBetSnapshot                         0.01023     % in code units (for unit length = 100 pc and unit velocity = 1 km/s, 0.01023 ~ 1 Myr)
+TimeOfFirstSnapshot                     0.          %
+CpuTimeBetRestartFile                   5400        % in seconds (5400 = every 1.5 hours)
+TimeBetStatistics                       0.1         %
+
+%   Accuracy of time integration
+TypeOfTimestepCriterion                 0           %
+ErrTolIntAccuracy                       0.05        %
+MaxSizeTimestep                         0.0001      % in code units
+MinSizeTimestep                         0.          % in code units
+NumberOfGlobalTimestepsToStopAfter      100000      % only required for AREPO2
+
+%   Tree algorithm and force accuracy
+ErrTolTheta                             0.5         %
+TypeOfOpeningCriterion                  1           %
+ErrTolForceAcc                          0.015       %
+
+%   Parameters of SPH
+DesNumNgb                               64          %
+MaxNumNgbDeviation                      2           %
+InitGasTemp                             40.0        % initial gas temperature in K, only used if not given in IC file
+MinGasTemp                              3.0         %
+CourantFac                              0.3         %
+
+% IsoSoundSpeed                         10          % only required for isothermal runs
+
+%   Further code parameters
+
+%   Domain parameters
+MultipleDomains		                    16          %
+TopNodeFactor		                    4           %
+
+%   System of units
+UnitLength_in_cm                        3.0856e+20  % 100 pc 
+UnitMass_in_g                           1.991E33    % 1 solar masses
+UnitVelocity_in_cm_per_s                1.0e+5      % 1 km/sec
+GravityConstantInternal                 0           %
+
+%   Prescribed Minima
+LimitUBelowThisDensity                  0           %
+LimitUBelowCertainDensityToThisValue    0           %
+MinimumDensityOnStartUp                 1.0e-10     %
+MinEgySpec	                            0           %
+
+%   Mesh Construction Constraints
+CellMaxAngleFactor	                    2.0         %
+CellShapingSpeed	                    0.8         %
+ReferenceGasPartMass                    2000.       %       
+TargetGasMassFactor                     1.0         % gas mass below which REFINEMENT_HIGH_RES_GAS is applied
+RefinementCriterion                     1           %
+DerefinementCriterion                   1           %
+MaxVolumeDiff                           8.          %
+MinVolume                               1.e-8       %
+MaxVolume                               1000.       %
+
+%   Image parameters (only required if compiled with VORONOI_IMAGES_FOREACHSNAPSHOT)
+% PicXpixels                            1000
+% PicYpixels                            1000
+% PicXaxis                              0
+% PicYaxis                              1
+% PicZaxis                              2
+% PicXmin                               400
+% PicXmax                               600
+% PicYmin                               400
+% PicYmax                               600
+% PicZmin                               400
+% PicZmax                               600
+
+%   SGChem parameters
+SGChemConstInitAbundances               1
+SGChemInitH2Abund                       0.0
+SGChemInitHPAbund                       0.01
+SGChemInitCPAbund                       1.4e-4
+SGChemInitCOAbund                       0.0
+SGChemInitCHxAbund                      0.0
+SGChemInitOHxAbund                      0.0
+SGChemInitHCOPAbund                     0.0
+SGChemInitHePAbund                      0.0
+SGChemInitMPAbund                       0.0
+
+SGChemTemperatureFloor                  20.
+
+CarbAbund                               1.4e-4
+OxyAbund                                3.2e-4
+MAbund                                  1.0e-7
+ZAtom                                   1.
+DeutAbund                               0.0
+InitDustTemp                            2
+UVFieldStrength                         1.7
+LWBGType                                0
+LWBGStartRedsh                          0
+DustToGasRatio                          1.0
+CosmicRayIonRate                        3e-17
+InitRedshift                            0.0
+ExternalDustExtinction                  0.0
+H2FormEx                                0.84
+H2FormKin                               0.12
+PhotoApprox                             6
+ISRFOption                              1           % 1 = uniform isotropic radiation field
+
+%   TreeCol parameters
+AtomicCoolOption                        3
+H2OpacityOption                         0
+TreeColMaxDistance                      0.3
+
+%   Initial MHD parameters (if not specified in initial conditions)
+MHDSeedDir                              4           % 1 = x-direction, 2 = y-direction, 4 = z-direction, 3 = x and y direction
+MHDSeedValue                            2e-8        % magnitude of the seed field in Gauss
+
+%   SF ECOGAL parameters
+SF_Mechanism                            1           % (3 is jeans)
+SFDensityThreshold                      5.0e7
+SFEfficiency                            0.01
+%InitialVelocity                        220
+%InnerRadius                            0.1
+
+%   SNE Feedback parameters
+SNStellarLifetime                       1           % (3 uses the changing lifetimes - parameter values below)
+LifetimeShorteningFactor                10
+TimeForLifetimeIncrease                 5
+
+SNEInjectionCriterion                   11
+SNESeed                                 355
+SNETargetMass                           0.
+SNEPeriodInYears                        250.
+SNEMinimalParticleNumber                40
+SNEMaxRadiusInParsecs                   5.0         % From Tress et al 2020, if equivalent to r_sc, the scatter radius
+SNEFixedRadiusInParsecs                 0.1         % assuming mean n is 1.0e5 - 1.0e6 and r_ST (Sedov-Taylor radius) equation from Blondin et al 1998
+SNEInjectionScheme                      0           % 0 = N closest cells, 1 = fixed radius, 2 = Neighboring cells
+SNETemperatureMax                       1.0e7       % From Goeller et al 2025
+
+%   Sink particle parameters
+% SinkCreationDensityCodeUnits          1.5e7 
+% SinkFormationRadius                   0.05        % 2.5 pc
+% SinkEvolutionDumpRateYears            1e5
+% MaxStellarMassPerSink                 1e4
+
+% SNEScatterAroundSink                  0.05        % comparable to the sink formation radius
+% SINKStarFormationEfficiency           0.05
+
+%   Sweep options
+% SweepConvergenceThreshold             1.0e-2      % To minimize number of iterations at first, from Peter et al 2022 (reasonable thresholds = 1e-2 to 1e-12)
+% SweepMaxNumIterations                 3           % From Peter et al 2022
+% SweepSigmaScatter                     1.0e-41     % Almost a complete guess: 3e-21 cm - Assuming sigma refers to the cross-section, as defined in Peter et al 2022
+% MinNumPhotons                         1.0e-5      % From SPRAI documentation (probably intended for cosmology runs - not sure about kpc scale)
+% SourceFactor                          1           % Pretty sure this is only used with STELLARAGE, not SF_ECOGAL
+

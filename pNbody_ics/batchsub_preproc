@@ -1,0 +1,20 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 128
+#SBATCH -J preproc_ic
+#SBATCH -o my_job.%J.out
+#SBATCH -e my_job.%J.err
+#SBATCH -p cosma8
+#SBATCH -A dp058                                 # change to your project allocation 
+#SBATCH --exclusive
+#SBATCH -t 00:30:00
+#SBATCH --mail-type=ALL                          # notifications for job done & fail
+#SBATCH --mail-user=zf28@st-andrews.ac.uk        # change to your email address
+
+# Load the same modules which the program was compiled with.
+module purge
+module load intel_comp/2024.2.0 compiler-rt tbb compiler mpi fftw/3.3.10cosma8  hdf5/1.14.4 hwloc/2.11.1
+export OMP_NUM_THREADS=1
+
+# Run the program
+mpirun -n $SLURM_NTASKS ./Arepo2_preproc preproc.param 0 > arepo2_preproc_out.txt

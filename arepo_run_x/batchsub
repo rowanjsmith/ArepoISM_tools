@@ -1,0 +1,32 @@
+#!/bin/bash -l
+
+#SBATCH --ntasks 128                        # number of MPI tasks (1 node = 128 tasks)      
+#SBATCH -J <job_name>                       # replace <job_name> with a meaningful name for your job
+#SBATCH -o my_job.%J.out                    # output file for standard output   
+#SBATCH -e my_job.%J.err                    # output file for standard error
+#SBATCH -p cosma8                           # partition to run on
+#SBATCH -A dp000                            # change to your project allocation
+#SBATCH --exclusive                         # run the job on exclusive nodes
+#SBATCH -t 72:00:00                         # maximum time limit for the job, e.g. 72 hours
+#SBATCH --mail-type=ALL                     # notifications for job start and end
+#SBATCH --mail-user=<your_email_address>    # change to your email address
+
+# Load the same modules which the program was compiled with.
+module purge
+module load intel_comp/2024.2.0 compiler-rt tbb compiler mpi fftw/3.3.10cosma8  hdf5/1.14.4 hwloc/2.11.1
+export OMP_NUM_THREADS=1
+
+# Run the program
+mpirun -n $SLURM_NTASKS ./Arepo in.param 0 > arepo_out.txt
+
+# "mpirun" is the command to run the executable (don't change this),
+# "-n $SLURM_NTASKS" links to the --ntasks parameter above (don't change this, change the number of 
+#       tasks in the #SBATCH --ntasks line above if you want to change this),
+# "./Arepo" specifies the executable, so you want to change it to the name of your AREPO executable 
+#       (./<Arepo_exec_name>),
+# "in.param" is the name of your parameter file (if your parameter file has the same name, you do 
+#       not need to change this),
+# "0" is the input option to start from an initial condition file, so you'll want to change this to 
+#       "2" if starting from an existing snapshot (see AREPO documentation "getting_started.md"),
+# "arepo_out.txt" is the output file where all the information printed out by AREPO will be stored. 
+#       You may want to change this to arepo_<job_name>_out.txt
