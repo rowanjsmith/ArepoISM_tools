@@ -1,0 +1,55 @@
+
+OutputUnits:
+  UnitLength_in_cm:         3.0856e20          # 100 kpc in centimeters
+  UnitMass_in_g:            1.991E33           # 1 M_sun in grams
+  UnitVelocity_in_cm_per_s: 1.0e5              # 1 km/s in centimeters per second
+  
+Galaxy:  
+  m_ref:              5000                     # reference mass of particles [solar mass]
+  nf:                 1                        # particle count multiplicative factor (used to reduce noise) 
+  hydro:              1                        # if set to 0, turn gas to collisionless particles
+  ftype:              "arepo"                  # output format (swift, gh5, gadget)
+  outputfilename:     "example_galaxy.hdf5"    # output file name
+  irand:              42                       # random seed
+  boxsize:            1000                     # boxsize [kpc]
+  
+# Parameters for gas component
+Gas:
+  fm:                 1             # particle mass to ref. mass ratio (set to 0 disable the component)
+  mass:               5.0e9         # component mass [solar mass]
+  Hr:                 2.5           # radial scale [kpc]
+  Hz:                 0.3           # vertical scale [kpc]
+  rmax_to_Hr_ratio:   10            # rmax to Hr ratio
+  zmax_to_Hz_ratio:   3             # zmax to Hz ratio
+  sigmavel:           10            # velocity dispersion [km/s] (if hydro=0)
+  T:                  10000         # temperature [K]            (if hydro=1)
+
+# Parameters for disk component
+Disk:
+  fm:                 1             # particle mass to ref. mass ratio (set to 0 disable the component)
+  mass:               2e10          # component mass [solar mass]
+  Hr:                 2.5           # radial scale [kpc]
+  Hz:                 0.3           # vertical scale [kpc]
+  fr:                 10            # grid rmax to Hr ratio
+  fz:                 10            # grid rmax to Hr ratio
+  toomre:             2             # Toomre stability criterion
+
+
+# Parameters for bulge component
+Bulge:
+  fm:                 1             # particle mass to ref. mass ratio (set to 0 disable the component)
+  mass:               0.4e10        # component mass [solar mass]
+  Hr:                 0.1           # radial scale [kpc]
+  fr:                 5.0           # grid rmax to Hr ratio
+
+# Parameters for dark halo component
+Halo:
+  fm:                 100           # particle mass to ref. mass ratio (set to 0 disable the component)
+  mass:               6e11          # component mass [solar mass]
+  c:                  10            # concentration parameter
+  alpha:              1             # inner slope
+  beta:               3             # outer slope
+  Rcut:               None          # cutting radius [kpc]
+  power_cut:          3             # power of the cut if Rcut is defined
+  fr:                 1.0           # rmax to r200 ratio
+  dR:                 0.25          # grid resolution [kpc]
