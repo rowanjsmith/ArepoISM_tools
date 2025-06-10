@@ -8,7 +8,7 @@ This guide was written for galactic simulations, though the general setup can be
 use cases.
 
 Good general advice is to familiarise yourself with the documentation folder of the AREPO repository:
-the 'getting_started.md' file will be particularly useful at first.
+the "getting_started.md" file will be particularly useful at first.
 
 The main steps required to run and work with AREPO simulations are as follows:  
 I. Get access to AREPO  
@@ -35,7 +35,7 @@ These tools are currently designed to work with HDF5 outputs, but can be modifie
 binary outputs if necessary.
 
 ----------------------------------------------------------------------------------------------------
-# I. GET ACCESS TO AREPO
+## I. GET ACCESS TO AREPO
 
 To get access to the AREPO repository from bitbucket using SSH, first go to: 
 https://bitbucket.org/account/settings/ssh-keys/  
@@ -63,7 +63,7 @@ If using AREPO 2, the Arepo2 branch should work for most configuration (includin
 with additional physics).
 
 ----------------------------------------------------------------------------------------------------
-# II. COMPILE AREPO
+## II. COMPILE AREPO
 
 1.  From your host directory (e.g. ~/arepo), find and edit the Template-Config.sh file to enable the 
     configuration options you require and disable the configuration options you do not require. 
@@ -130,7 +130,7 @@ with additional physics).
 
     FOR AREPO 1:  
     
-        ifeq ( \$(SYSTYPE), "cosma")
+        ifeq ($(SYSTYPE), "cosma")
             CC       =  mpicc
             FC       =  mpif90 -nofor-main
             OPTIMIZE =  -std=c99 -O2 -g -DH5_USE_16_API
@@ -142,13 +142,13 @@ with additional physics).
             HDF5LIB  =  -lhdf5
             MPICHLIB = -lmpi
             HWLOC_INCL= -I/usr/include
-            HWLOC_LIB = \$(LDFLAGS) -lhwloc
-            LINKER   = \$(FC)
+            HWLOC_LIB = $(LDFLAGS) -lhwloc
+            LINKER   = $(FC)
         endif
 
     FOR AREPO 2:  
 
-        ifeq ( \$(SYSTYPE), "cosma")
+        ifeq ($(SYSTYPE), "cosma")
             CC       = mpicc
             CPPC     = mpicxx -std=c++11
             FC       = mpif90 -nofor-main
@@ -161,8 +161,8 @@ with additional physics).
             HDF5LIB  =  -lhdf5
             MPICHLIB = -lmpi
             HWLOC_INCL= -I/usr/include
-            HWLOC_LIB = \$(LDFLAGS) -lhwloc
-            LINKER   = \$(FC)
+            HWLOC_LIB = $(LDFLAGS) -lhwloc
+            LINKER   = $(FC)
         endif
     
 4.  Purge existing modules then load the required modules on COSMA:  
@@ -197,11 +197,11 @@ with additional physics).
     will find your executable in the current directory.
 
 ----------------------------------------------------------------------------------------------------
-# III. RUN AREPO
+## III. RUN AREPO
 
 In your data directory (typically "/cosma8/data/<project_ID>/<user_ID>/"), create a new directory to 
-run AREPO from, or copy the example directory found here:
-"https://github.com/rowanjsmith/ArepoISM_tools/arepo_run_x"
+run AREPO from, or copy the example directory found here: 
+https://github.com/rowanjsmith/ArepoISM_tools/arepo_run_x
 
 This directory should contain the following:
 -   an AREPO executable obtained from compiling the code
@@ -234,10 +234,10 @@ This will show you the following information:
 -   PARTITION is where the job is/will be running. If you are on COSMA8, this should be "cosma8".
 -   NAME is the job name you specified in the batchsub file using "-J".
 -   USER is the user who submitted the job. This should be your user name.
--   ST is the status of the job. 'PD' stands for pending, indicating that you job is in the 
-        queue, while 'R' stands for running. 
+-   ST is the status of the job. "PD" stands for pending, indicating that you job is in the 
+        queue, while "R" stands for running. 
 -   TIME is the amount of time your job has been running for. It will start when you job status
-        changes from 'PD' to 'R'. If present, the prefix indicates the number of days (e.g. 
+        changes from "PD" to "R". If present, the prefix indicates the number of days (e.g. 
         2-01:00:00 means your job has been running for 2 days and 1 hour).
 -   NODES is the number of nodes allocated to your job. One node has 128 processors (ntasks).
 -   NODELIST (REASON) lists either the node ID(s) allocated to your job if it is running, or
@@ -275,7 +275,7 @@ determined from the literature, search for the parameter name in the codebase to
 is used.
 
 ----------------------------------------------------------------------------------------------------
-# IV. READ AND ANALYSE AREPO OUTPUTS
+## IV. READ AND ANALYSE AREPO OUTPUTS
 
 Coming soon to a ~~movie theatre~~ repository near you...
 
