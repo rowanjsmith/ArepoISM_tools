@@ -1,5 +1,5 @@
 ----------------------------------------------------------------------------------------------------
-Last updated: 10 Jun 2025
+Last updated: 11 Jun 2025
 ----------------------------------------------------------------------------------------------------
 
 This is a guide to create initial conditions (ICs) for isolated galaxy simulations in AREPO with 
