@@ -136,5 +136,4 @@ Compile AREPO with your chosen options and run with the required parameters and 
 initial conditions file.
 ----------------------------------------------------------------------------------------------------
 
-Written by Zoe Faes (zf28[at]st-andrews.ac.uk) with wisdom from Robin Tress, David Whitworth, and
-the pNbody documentation
+Written by Zoe Faes with wisdom from Robin Tress, David Whitworth, and the pNbody documentation
