@@ -381,7 +381,8 @@ def stats_description(array):
     third_quartile = np.percentile(array, 75)
     std_dev = np.std(array)
     
-    return f'Mean: {mean:.2f}, Std Dev: {std_dev:.2f}, Median: {median:.2f}, Min: {min_val:.2f}, Max: {max_val:.2f}, First Quartile: {first_quartile:.2f}, Third Quartile: {third_quartile:.2f}'
+    return f'Mean: {mean}, Std Dev: {std_dev}, Median: {median}, Min: {min_val}, Max: {max_val}, First Quartile: {first_quartile}, Third Quartile: {third_quartile}'
+
 
 def print_snap_info(filepath: str):
     """
