@@ -77,9 +77,9 @@ class Snapshot:
             if 'ChemicalAbundances' in file['PartType0']:
                 self.has_chemistry = True
                 self.xHe = 0.1 # Assumed in chemical network?
-                self.xH2 = file['PartType0']['ChemicalAbundances'].T[0]
-                self.xHp = file['PartType0']['ChemicalAbundances'].T[1]
-                self.xCO = file['PartType0']['ChemicalAbundances'].T[2]
+                self.xH2 = np.transpose(file['PartType0']['ChemicalAbundances'])[0]
+                self.xHp = np.transpose(file['PartType0']['ChemicalAbundances'])[1]
+                self.xCO = np.transpose(file['PartType0']['ChemicalAbundances'])[2]
             else:
                 self.has_chemistry = False
                 self.xHe = None
@@ -382,3 +382,37 @@ def stats_description(array):
     std_dev = np.std(array)
     
     return f'Mean: {mean:.2f}, Std Dev: {std_dev:.2f}, Median: {median:.2f}, Min: {min_val:.2f}, Max: {max_val:.2f}, First Quartile: {first_quartile:.2f}, Third Quartile: {third_quartile:.2f}'
+
+def print_snap_info(filepath: str):
+    """
+    Prints the snapshot information from the HDF5 file.
+    
+    Parameters
+    ----------
+    filepath : str
+        The path to the HDF5 file.
+    """
+    with h5py.File(filepath, 'r') as file:
+        print("\nCONFIG")
+        for item in file['Config'].attrs:
+            print(item, file['Config'].attrs[item])
+
+        print("\nHEADER")
+        for item in file['Header'].attrs:
+            print(item, file['Header'].attrs[item])
+
+        print("\nPARAMETERS")
+        for item in file['Parameters'].attrs:
+            print(item, file['Parameters'].attrs[item])
+
+        for key in file.keys():
+            if key[0:8] == 'PartType':  # Skip 'Config', 'Header', and 'Parameters'
+                try:
+                    print(f"\n{key} keys: \n{file[key].keys()}")
+                except AttributeError:
+                    print(f"\n{key} doesn't have keys")
+
+        if (np.array(file['PartType0']['ParticleIDs']) == 0).any():
+            print("PartType0 ParticleID is 0 at index: ", np.where(np.array(file['PartType0']['ParticleIDs']) == 0))
+
+        file.close()
