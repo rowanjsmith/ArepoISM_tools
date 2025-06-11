@@ -152,6 +152,8 @@ class Snapshot:
             self.velocity_type5 = file['PartType5']['Velocities'] << self.arepo_velocity
         else:
             self.has_type_5 = False
+
+        file.close()
     
     # The __repr__ method for a formal representation
     def __repr__(self):
