@@ -279,6 +279,9 @@ is used.
 
 Coming soon to a ~~movie theatre~~ repository near you...
 
+In the meantime, have a look at snapshot_tools.py, plotter.py and plotter_example.py here:
+https://github.com/rowanjsmith/ArepoISM_tools
+
 ----------------------------------------------------------------------------------------------------
 
 Written by Zoe Faes with wisdom from Rowan Smith, Sansith Hewapathirana, David Whitworth, 
