@@ -297,9 +297,10 @@ def temperature_hist(snap,
     for temp in temperature:
         if np.isinf(temp):
             inf_count += 1
-    print(f"Percentage of infinite temperature values: {inf_count / len(snap.temperature) * 100:.2f}% \nReplacing with 1e8 K")
 
-    temperature[np.isinf(temperature)] = 1e8
+    if inf_count > 0:
+        print(f"Percentage of infinite temperature values: {inf_count / len(snap.temperature) * 100:.2f}% \nReplacing inf values with 1e8 K")
+        temperature[np.isinf(temperature)] = 1e8
 
     # set color limits
     if vmin is None:
@@ -751,9 +752,10 @@ def phase_space(snap,
     for temp in temperature:
         if np.isinf(temp):
             inf_count += 1
-    print(f"Percentage of infinite temperature values: {inf_count / len(snap.temperature) * 100:.2f}% \nReplacing with 1e8 K")
 
-    temperature[np.isinf(temperature)] = 1e8
+    if inf_count > 0:
+        print(f"Percentage of infinite temperature values: {inf_count / len(snap.temperature) * 100:.2f}% \nReplacing inf values with 1e8 K")
+        temperature[np.isinf(temperature)] = 1e8
 
     log_temp = np.log10(temperature + 1e-10)  # add small value to avoid log(0)
     log_ndens = np.log10(snap.ndensity.to_value(u.cm**(-3)) + 1e-10)  # add small value to avoid log(0)
