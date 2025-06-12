@@ -634,12 +634,6 @@ def ndensity_profile(snap,
     ndensity = snap.ndensity.to_value(1/u.cm**3)
     density = snap.density.to_value(u.g/u.cm**3)
 
-    description = stats_description(ndensity)
-    print(f"Number Density Statistics:\n{description}")
-
-    description = stats_description(density)
-    print(f"Density Statistics:\n{description}")
-
     fig, ax = plt.subplots(figsize=(10, 8))
     if (disk_radius is not None) & (disk_half_height is not None):
         hist2d = plt.hist2d(r[snap.disk], ndensity[snap.disk], cmap=cmap, bins=bins, norm=norm)# norm=mcolors.LogNorm())
