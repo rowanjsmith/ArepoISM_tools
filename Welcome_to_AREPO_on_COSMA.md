@@ -280,7 +280,7 @@ is used.
 Coming soon to a ~~movie theatre~~ repository near you...
 
 In the meantime, have a look at snapshot_tools.py, plotter.py and plotter_example.py here:
-https://github.com/rowanjsmith/ArepoISM_tools
+https://github.com/rowanjsmith/ArepoISM_tools/tree/zoes_tools
 
 ----------------------------------------------------------------------------------------------------
 
