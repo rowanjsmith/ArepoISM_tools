@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 """
+This file contains methods to read and modify AREPO snapshots in HDF5 format.
+The Snapshot class contains tools to facilitate the computation of useful derived quantities.
+
 Created on Wed Oct 30 12:42:00 2024
 
 @author: zoefaes
