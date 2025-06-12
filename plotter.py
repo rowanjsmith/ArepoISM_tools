@@ -145,6 +145,7 @@ def mass_hist(snap,
         if snap.has_type_4:
             xs, ys, zs = snap.get_centered_coordinates(parttype=4).T.to_value(u.kpc)
         else:
+            show_stars = False
             warnings.warn(f"Snapshot {snap.name} does not have star particles.")
 
     # Start figure
@@ -209,6 +210,7 @@ def column_density_hist(snap,
         if snap.has_type_4:
             xs, ys, zs = snap.get_centered_coordinates(parttype=4).T.to_value(u.kpc)
         else:
+            show_stars = False
             warnings.warn(f"Snapshot {snap.name} does not have star particles.")
 
     # Get area per bin
