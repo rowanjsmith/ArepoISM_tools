@@ -1,7 +1,7 @@
 %   Relevant files
-InitCondFile  	                        ./snapshots/<initial_conditions>    % replace with path to initial condition file (or initial snapshot)
-OutputDir                               snapshots                           % name of output directory
-SnapshotFileBase                        <sim_name>                          % name of simulation
+InitCondFile  	                        ./snapshots/V1_000            % replace with path to initial condition file (or initial snapshot)
+OutputDir                               snapshots                     % name of output directory
+SnapshotFileBase                        V1                            % name of simulation
 
 %   CPU-time limit
 TimeLimitCPU                            2556000     % 71 hours to enable automatic restart
@@ -24,7 +24,7 @@ StarformationOn                         0           % superseeded by SF_ECOGAL a
  
 %   Caracteristics of run
 TimeBegin                               0           % start simulation at this time in code units (typically set to 0 for galactic runs)
-TimeMax	                                2.5         % end simulation at this time in code units
+TimeMax	                                15          % end simulation at this time in code units
 
 Omega0	                                0.0         % total matter density
 OmegaLambda                             0.0         %
@@ -72,9 +72,9 @@ TimeBetStatistics                       0.1         %
 %   Accuracy of time integration
 TypeOfTimestepCriterion                 0           %
 ErrTolIntAccuracy                       0.05        %
-MaxSizeTimestep                         0.0001      % in code units
+MaxSizeTimestep                         0.0005      % in code units
 MinSizeTimestep                         0.          % in code units
-NumberOfGlobalTimestepsToStopAfter      100000      % only required for AREPO2
+NumberOfGlobalTimestepsToStopAfter      300000000      % only required for AREPO2
 
 %   Tree algorithm and force accuracy
 ErrTolTheta                             0.5         %
@@ -84,7 +84,7 @@ ErrTolForceAcc                          0.015       %
 %   Parameters of SPH
 DesNumNgb                               64          %
 MaxNumNgbDeviation                      2           %
-InitGasTemp                             40.0        % initial gas temperature in K, only used if not given in IC file
+InitGasTemp                             10000       % initial gas temperature in K, only used if not given in IC file
 MinGasTemp                              3.0         %
 CourantFac                              0.3         %
 
@@ -170,30 +170,30 @@ H2OpacityOption                         0
 TreeColMaxDistance                      0.3
 
 %   Initial MHD parameters (if not specified in initial conditions)
-MHDSeedDir                              4           % 1 = x-direction, 2 = y-direction, 4 = z-direction, 3 = x and y direction
-MHDSeedValue                            2e-8        % magnitude of the seed field in Gauss
+% MHDSeedDir                            4           % 1 = x-direction, 2 = y-direction, 4 = z-direction, 3 = x and y direction
+% MHDSeedValue                          2e-8        % magnitude of the seed field in Gauss
 
 %   SF ECOGAL parameters
-SF_Mechanism                            1           % (3 is jeans)
+SF_Mechanism                            3           % 1 = density threshold, 2 = threshold + probabilistic, 3 = jeans + probabilistic, 4 = 3 + converging flow
 SFDensityThreshold                      5.0e7
 SFEfficiency                            0.01
 %InitialVelocity                        220
 %InnerRadius                            0.1
 
 %   SNE Feedback parameters
-SNStellarLifetime                       1           % (3 uses the changing lifetimes - parameter values below)
-LifetimeShorteningFactor                10
-TimeForLifetimeIncrease                 5
+SNStellarLifetime                       3           % 1 uses lifetimes from table 25.6 in Maeder (2009), 2 uses shortened lifetimes, 3 uses increasing lifetimes from shortened to Maeder (parameter values below)
+LifetimeShorteningFactor                10          % factor by which to divide Maeder lifetimes
+TimeForLifetimeIncrease                 5           % time (in code units) for linear increase of lifetimes from shortened to Maeder lifetimes
 
 SNEInjectionCriterion                   11
 SNESeed                                 355
 SNETargetMass                           0.
 SNEPeriodInYears                        250.
-SNEMinimalParticleNumber                40
-SNEMaxRadiusInParsecs                   5.0         % From Tress et al 2020, if equivalent to r_sc, the scatter radius
-SNEFixedRadiusInParsecs                 0.1         % assuming mean n is 1.0e5 - 1.0e6 and r_ST (Sedov-Taylor radius) equation from Blondin et al 1998
-SNEInjectionScheme                      0           % 0 = N closest cells, 1 = fixed radius, 2 = Neighboring cells
-SNETemperatureMax                       1.0e7       % From Goeller et al 2025
+SNEMinimalParticleNumber                40          % recommendation: set to 40 in ISM (Tress et al 2020)
+SNEMaxRadiusInParsecs                   60          % recommendation: set equal to radius containing about 40 neighbouring cells (Tress et al 2020)
+% SNEFixedRadiusInParsecs               0.1         % assuming mean n is 1.0e5 - 1.0e6 and r_ST (Sedov-Taylor radius) equation from Blondin et al 1998
+SNEInjectionScheme                      2           % 0 = N closest cells, 1 = fixed radius, 2 = Neighboring cells
+SNETemperatureMax                       1.0e7       % recommendation: 1e7 (Goeller et al 2025)
 
 %   Sink particle parameters
 % SinkCreationDensityCodeUnits          1.5e7 
