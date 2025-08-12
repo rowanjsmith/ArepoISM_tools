@@ -17,6 +17,7 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as animation
 import h5py
 import warnings
+import time
 
 class Snapshot:
     def __init__(self, filepath):
@@ -62,8 +63,11 @@ class Snapshot:
             if 'MagneticField' in file['PartType0']:
                 self.has_mag_field = True
                 self.mag_field = file['PartType0']['MagneticField'] << (self.arepo_mass ** (1/2) / (self.arepo_time * (self.arepo_length ** (1/2))))
-                self.mag_field_divergence = file['PartType0']['MagneticFieldDivergence']
-                self.mag_field_divergence_alternative = file['PartType0']['MagneticFieldDivergenceAlternative']
+                try:
+                    self.mag_field_divergence = file['PartType0']['MagneticFieldDivergence']
+                    self.mag_field_divergence_alternative = file['PartType0']['MagneticFieldDivergenceAlternative']
+                except KeyError:
+                    warnings.warn("No MagneticFieldDivergence or MagneticFieldDivergenceAlternative found in snapshot.")
             else:
                 self.has_mag_field = False
                 self.mag_field = None
@@ -97,13 +101,28 @@ class Snapshot:
                 self.has_potential = False
                 self.potential = None
 
+            if 'TracerField' in file['PartType0']:
+                self.has_tracer_field = True
+                self.tracer_field = file['PartType0']['TracerField'][()]  # Eagerly read (i.e. load into memory)
+            else:
+                self.has_tracer_field = False
+                self.tracer_field = None
+
             # get derived quantities
+            # start = time.time()
             self.ndensity = self.get_number_density()
+            # end = time.time()
+            # print(f'Time taken for ndensity: {end - start} s\n')
+            # start = time.time()
             self.temperature = self.get_temperature()
-            # use reasonable units for division to prevent overflow runtime warning
-            self.cell_volume = self.mass.to_value(u.solMass) / self.density.to_value(u.solMass/u.pc**3)
-            self.cell_volume = self.cell_volume * u.pc**3
-            self.effective_cell_radius = (3 * self.cell_volume / (4 * np.pi)) ** (1/3)
+            # end = time.time()
+            # print(f'Time taken for temperature: {end - start} s\n')
+            # # use reasonable units for division to prevent overflow runtime warning
+            # start = time.time()
+            self.cell_volume = (self.mass.to_value(u.solMass) / self.density.to_value(u.solMass/u.pc**3)) << (u.pc**3)
+            self.effective_cell_radius = ((3 * self.cell_volume.to_value(u.pc**3) / (4 * np.pi)) ** (1/3)) << u.pc
+            # end = time.time()
+            # print(f'Time taken for cell volume & radius: {end - start} s\n')
 
 
         else:
@@ -187,11 +206,11 @@ class Snapshot:
             Number density :math:'n'.
 
         """
-        density = self.density.to(u.g/u.cm**3)
-        xHe = 0.1 if (self.xHe is None) else self.xHe
-        ndensity = density/((1.0 + 4.0 * xHe) * constants.m_p.cgs)
+        density = self.density.to_value(u.g/u.cm**3)
+        xHe = 0.1 # if (self.xHe is None) else self.xHe
+        ndensity = density/((1.0 + 4.0 * xHe) * 1.67262192369e-24) # constants.m_p.cgs.value
 
-        return ndensity
+        return ndensity << (1/(u.cm**3))
     
     def get_temperature(self):
         """        
@@ -222,12 +241,12 @@ class Snapshot:
         else:
             warnings.warn('No chemistry data available. Temperature calculated assuming neutral atomic gas with 0.1 He/H.', UserWarning)
             xTOT = 1.0 + 0.1  # Default value if no chemistry data is available
-        nTOT = xTOT * self.ndensity
-        mean_molecular_weight = self.density/nTOT
+        nTOT = xTOT * self.ndensity.to_value(1/(u.cm**3))
+        mean_molecular_weight = self.density.to_value(u.g/(u.cm**3))/nTOT
         # print(f"Mean Molecular Weight: \nMean: {np.mean((mean_molecular_weight/constants.m_p).decompose())}, \nMax: {np.max((mean_molecular_weight/constants.m_p).decompose())}, \nMin: {np.min((mean_molecular_weight/constants.m_p).decompose())}")
-        temperature = ((2.0/3.0) * self.internal_energy * mean_molecular_weight / constants.k_B).to(u.K)
+        temperature = (2.0/3.0) * self.internal_energy.to_value(u.cm**2 / u.s**2) * mean_molecular_weight / constants.k_B.cgs.value
         
-        return temperature
+        return temperature << u.K
 
     def check_particle_coordinate_limits(self) -> bool:
         """
