@@ -17,7 +17,6 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as animation
 import h5py
 import warnings
-import time
 
 class Snapshot:
     def __init__(self, filepath):
@@ -109,20 +108,11 @@ class Snapshot:
                 self.tracer_field = None
 
             # get derived quantities
-            # start = time.time()
             self.ndensity = self.get_number_density()
-            # end = time.time()
-            # print(f'Time taken for ndensity: {end - start} s\n')
-            # start = time.time()
             self.temperature = self.get_temperature()
-            # end = time.time()
-            # print(f'Time taken for temperature: {end - start} s\n')
-            # # use reasonable units for division to prevent overflow runtime warning
-            # start = time.time()
+            # use reasonable units for division to prevent overflow runtime warning
             self.cell_volume = (self.mass.to_value(u.solMass) / self.density.to_value(u.solMass/u.pc**3)) << (u.pc**3)
             self.effective_cell_radius = ((3 * self.cell_volume.to_value(u.pc**3) / (4 * np.pi)) ** (1/3)) << u.pc
-            # end = time.time()
-            # print(f'Time taken for cell volume & radius: {end - start} s\n')
 
 
         else:
