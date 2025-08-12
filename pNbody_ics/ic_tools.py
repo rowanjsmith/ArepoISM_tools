@@ -234,6 +234,39 @@ def add_snapshot_property(filepath: str,
             raise Exception(f"{snap_group} not found in the HDF5 file.")
         
 
+def update_snapshot_property(filepath: str,
+                             snap_group: str,
+                             property: str,
+                             data):
+    # write to hdf5 file
+    with h5py.File(filepath, 'r+') as f:
+        if snap_group in f.keys():
+            if property in f[snap_group]:
+                if not len(f[snap_group][property]) == len(data):
+                    if snap_group == ('Config' or 'Header' or 'Parameters'):
+                        warnings.warn(f"Existing {property} data and new {property} data have different lengths.", UserWarning)
+                    else:
+                        raise Exception(f"Existing {property} data and new {property} data must have the same length (corresponding to the number of cells in snapshot).")
+                # check for same shape
+                elif not np.shape(f[snap_group][property]) == np.shape(data):
+                    warnings.warn(f"Existing {property} data and new {property} data have different shapes. {property} cannot be modified in place and will be overwritten.", UserWarning)
+                    del f[snap_group][property]
+                    f[snap_group].create_dataset(property, data=data)
+
+                    print(f"{property} successfully updated.")
+                else:
+                    # Overwrite existing dataset with new data
+                    f[snap_group][property][:] = data  # Modify in place
+
+                    # f.flush()
+
+                    print(f"{property} successfully updated.")
+            else:
+                raise Exception(f"{property} not found in {snap_group}.")
+        else:
+            raise Exception(f"{snap_group} not found in the HDF5 file.")
+        
+
 def add_bh_particle(filepath, bh_mass_in_Msun=None):
     """Add mass to a dark matter particle at the 
     center of the box to account for SMBH potential.
@@ -409,15 +442,21 @@ def generate_magnetic_field(points: np.ndarray,
     
     return B_field
 
-def disk_mask(coordinates, boxsize, radii = [0, 15], half_heights = [0, 0.5]):
+def disk_mask(coordinates, boxsize, unit_length_in_kpc, radii_in_kpc = [0, 15], half_heights_in_kpc = [0, 0.5]):
 
-    xc, yc, zc = np.array(coordinates).T - boxsize/2
+    xc, yc, zc = (np.array(coordinates).T - boxsize/2) * unit_length_in_kpc
     r = np.sqrt(xc*xc + yc*yc)
     theta = np.arctan2(yc, xc)
 
-    disk = (r > radii[0]) & (r < radii[1]) & (np.abs(zc) < half_heights[1]) & (np.abs(zc) > half_heights[0])
+    disk = (r > radii_in_kpc[0]) & (r < radii_in_kpc[1]) & (np.abs(zc) < half_heights_in_kpc[1]) & (np.abs(zc) > half_heights_in_kpc[0])
 
     return disk
+
+def dens_mask(densities, unit_density, density_threshold_cgs = 1e-37):
+
+    mask = ((densities * unit_density) < density_threshold_cgs)
+
+    return mask
 
 def get_number_density():
     """
@@ -454,9 +493,9 @@ def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc
     f = h5py.File(filepath, 'r+')
 
     # get units
-    unit_length_in_kpc = f['Parameters'].attrs['UnitLength_in_cm'] / 3.0856e21
     unit_mass = f['Parameters'].attrs['UnitMass_in_g']
     unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+    unit_length_in_kpc = unit_length / 3.0856e21
     unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
     unit_density = unit_mass / unit_length**3
 
@@ -474,17 +513,54 @@ def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc
     half_heights_in_kpc = np.array(half_heights_in_kpc)
 
     # get disk
-    disk = disk_mask(coords, boxsize, radii=radii_in_kpc * unit_length_in_kpc, half_heights=half_heights_in_kpc * unit_length_in_kpc)
+    disk = disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+    print(f"Disk mask: {np.sum(disk)} particles in disk with radii {radii_in_kpc} kpc and half heights {half_heights_in_kpc} kpc")
 
     # get density of disk
-    disk_ndensity = density[disk] * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs / unit_mass)
+    disk_ndensity = density[disk] * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
+    print('mean disk_density (g cm-3): ', np.mean(density[disk] * unit_density))
+    print('mean disk_ndensity (cm-3): ', np.mean(disk_ndensity))
 
     # get temperature of disk
     xTOT = 1.0 + xHp[disk] - xH2[disk] + xHe
     nTOT = xTOT * disk_ndensity
     mean_molecular_weight = density[disk] * unit_density / nTOT
     # print(f"Mean Molecular Weight: \nMean: {np.mean((mean_molecular_weight/constants.m_p).decompose())}, \nMax: {np.max((mean_molecular_weight/constants.m_p).decompose())}, \nMin: {np.min((mean_molecular_weight/constants.m_p).decompose())}")
-    disk_temp = (2.0/3.0) * internal_energy[disk] * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs
+    disk_temp = (2.0/3.0) * internal_energy[disk] * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
 
     return disk_ndensity, disk_temp
+
+def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100], xHe=0.1):
+
+    # load file
+    f = h5py.File(filepath, 'r+')
+
+    # get units
+    unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+    unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+    unit_length_in_kpc = unit_length / 3.0856e21
+    unit_density = unit_mass / unit_length**3
+
+    # get gas properties
+    coords = np.array(f['PartType0']['Coordinates'])
+    density = np.array(f['PartType0']['Density'])
+
+    boxsize = f['Header'].attrs['BoxSize']
+
+    f.close()
+
+    radii_in_kpc = np.array(radii_in_kpc)
+    half_heights_in_kpc = np.array(half_heights_in_kpc)
+
+    # get region outside disk
+    CGM = dens_mask(density, unit_density, density_threshold_cgs) & disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+    
+    print(f"CGM mask: {np.sum(CGM)} particles outside galactic disk under density threshold {density_threshold_cgs} g/cm^3")
+
+    # update densities
+    density[CGM] = CGM_ndensity * ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value) / unit_density
+
+    # set densities
+    update_snapshot_property(filepath, 'PartType0', 'Density', density)
+
 
