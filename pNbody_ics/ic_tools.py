@@ -448,10 +448,21 @@ def disk_mask(coordinates, boxsize, unit_length_in_kpc, radii_in_kpc = [0, 15], 
     r = np.sqrt(xc*xc + yc*yc)
     theta = np.arctan2(yc, xc)
 
-    disk = (r > radii_in_kpc[0]) & (r < radii_in_kpc[1]) & (np.abs(zc) < half_heights_in_kpc[1]) & (np.abs(zc) > half_heights_in_kpc[0])
+    disk = ((r > radii_in_kpc[0]) & (r < radii_in_kpc[1])) & ((np.abs(zc) < half_heights_in_kpc[1]) & (np.abs(zc) > half_heights_in_kpc[0]))
     print(f"Disk mask: {np.sum(disk)} particles in disk with radii {radii_in_kpc} kpc and half heights {half_heights_in_kpc} kpc")
 
     return disk
+
+def cgm_mask(coordinates, boxsize, unit_length_in_kpc, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100]):
+
+    xc, yc, zc = (np.array(coordinates).T - boxsize/2) * unit_length_in_kpc
+    r = np.sqrt(xc*xc + yc*yc)
+    theta = np.arctan2(yc, xc)
+
+    cgm = ((r > radii_in_kpc[0]) & (r < radii_in_kpc[1])) | ((np.abs(zc) < half_heights_in_kpc[1]) & (np.abs(zc) > half_heights_in_kpc[0]))
+    print(f"CGM mask: {np.sum(cgm)} particles in region with radii {radii_in_kpc} kpc and half heights {half_heights_in_kpc} kpc")
+
+    return cgm
 
 def dens_mask(densities, unit_density, density_threshold_cgs = 1e-37):
 
@@ -545,6 +556,57 @@ def get_disk_mass_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_i
 
     return disk_mass, disk_ndensity, disk_temp
 
+def get_cgm_mass_ndensity_temp(filepath, radii_in_kpc = [20, 100], half_heights_in_kpc = [1, 50], xHe=0.1):
+    """
+    Get the number density per cubic cm and temperature in Kelvin of the disk.
+    """
+    # load file
+    f = h5py.File(filepath, 'r+')
+
+    # get units
+    unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+    unit_mass_in_solmass = unit_mass / 1.9884e33
+    unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+    unit_length_in_kpc = unit_length / 3.0856e21
+    unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
+    unit_density = unit_mass / unit_length**3
+
+    # get gas properties
+    coords = np.array(f['PartType0']['Coordinates'])
+    mass = np.array(f['PartType0']['Masses'])
+    density = np.array(f['PartType0']['Density'])
+    internal_energy = np.array(f['PartType0']['InternalEnergy'])
+    xH2, xHp, xCO = np.array(f['PartType0']['ChemicalAbundances']).T
+
+    boxsize = f['Header'].attrs['BoxSize']
+
+    f.close()
+
+    radii_in_kpc = np.array(radii_in_kpc)
+    half_heights_in_kpc = np.array(half_heights_in_kpc)
+
+    # get cgm
+    cgm = cgm_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+
+    # get mass of cgm
+    cgm_mass = np.sum(mass[cgm]) * unit_mass_in_solmass
+    print('Total cgm mass (M_sun): ', cgm_mass)
+
+    # get density of cgm
+    cgm_ndensity = density[cgm] * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
+    print('mean cgm_density (g cm-3): ', np.mean(density[cgm] * unit_density))
+    print('mean cgm_ndensity (cm-3): ', np.mean(cgm_ndensity))
+
+    # get temperature of cgm
+    xTOT = 1.0 + xHp[cgm] - xH2[cgm] + xHe
+    nTOT = xTOT * cgm_ndensity
+    mean_molecular_weight = density[cgm] * unit_density / nTOT
+    # print(f"Mean Molecular Weight: \nMean: {np.mean((mean_molecular_weight/constants.m_p).decompose())}, \nMax: {np.max((mean_molecular_weight/constants.m_p).decompose())}, \nMin: {np.min((mean_molecular_weight/constants.m_p).decompose())}")
+    cgm_temp = (2.0/3.0) * internal_energy[cgm] * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
+    print('mean cgm_temp (K): ', np.mean(cgm_temp))
+
+    return cgm_mass, cgm_ndensity, cgm_temp
+
 def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100], xHe=0.1):
 
     # load file
@@ -568,7 +630,7 @@ def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, 
     half_heights_in_kpc = np.array(half_heights_in_kpc)
 
     # get region outside disk
-    CGM = dens_mask(density, unit_density, density_threshold_cgs) & disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+    CGM = dens_mask(density, unit_density, density_threshold_cgs) & cgm_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
     
     print(f"CGM mask: {np.sum(CGM)} particles outside galactic disk under density threshold {density_threshold_cgs} g/cm^3")
 
@@ -612,7 +674,7 @@ def set_CGM_temperature(filepath, CGM_temp_K = 1e6, temp_threshold_K = 1e10, rad
     half_heights_in_kpc = np.array(half_heights_in_kpc)
 
     # get region outside disk
-    CGM = temp_mask(temperature, temp_threshold_K) & disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+    CGM = temp_mask(temperature, temp_threshold_K) & cgm_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
     
     print(f"CGM mask: {np.sum(CGM)} particles outside galactic disk over temperature threshold {temp_threshold_K} K")
 
