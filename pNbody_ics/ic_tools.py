@@ -449,12 +449,21 @@ def disk_mask(coordinates, boxsize, unit_length_in_kpc, radii_in_kpc = [0, 15], 
     theta = np.arctan2(yc, xc)
 
     disk = (r > radii_in_kpc[0]) & (r < radii_in_kpc[1]) & (np.abs(zc) < half_heights_in_kpc[1]) & (np.abs(zc) > half_heights_in_kpc[0])
+    print(f"Disk mask: {np.sum(disk)} particles in disk with radii {radii_in_kpc} kpc and half heights {half_heights_in_kpc} kpc")
 
     return disk
 
 def dens_mask(densities, unit_density, density_threshold_cgs = 1e-37):
 
     mask = ((densities * unit_density) < density_threshold_cgs)
+    print(f"Density mask: {np.sum(mask)} particles in region with density below {density_threshold_cgs} g/cm^3")
+
+    return mask
+
+def temp_mask(temperatures, temperature_threshold = 1e10):
+
+    mask = (temperatures > temperature_threshold)
+    print(f"Temperature mask: {np.sum(mask)} particles in region with temperature above {temperature_threshold} K")
 
     return mask
 
@@ -485,7 +494,7 @@ def get_number_density():
 
     return ndensity
 
-def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc = [0, 0.5], xHe=0.1):
+def get_disk_mass_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc = [0, 0.5], xHe=0.1):
     """
     Get the number density per cubic cm and temperature in Kelvin of the disk.
     """
@@ -494,6 +503,7 @@ def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc
 
     # get units
     unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+    unit_mass_in_solmass = unit_mass / 1.9884e33
     unit_length = f['Parameters'].attrs['UnitLength_in_cm']
     unit_length_in_kpc = unit_length / 3.0856e21
     unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
@@ -501,6 +511,7 @@ def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc
 
     # get gas properties
     coords = np.array(f['PartType0']['Coordinates'])
+    mass = np.array(f['PartType0']['Masses'])
     density = np.array(f['PartType0']['Density'])
     internal_energy = np.array(f['PartType0']['InternalEnergy'])
     xH2, xHp, xCO = np.array(f['PartType0']['ChemicalAbundances']).T
@@ -514,7 +525,10 @@ def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc
 
     # get disk
     disk = disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
-    print(f"Disk mask: {np.sum(disk)} particles in disk with radii {radii_in_kpc} kpc and half heights {half_heights_in_kpc} kpc")
+
+    # get mass of disk
+    disk_mass = np.sum(mass[disk]) * unit_mass_in_solmass
+    print('Total disk mass (M_sun): ', disk_mass)
 
     # get density of disk
     disk_ndensity = density[disk] * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
@@ -527,8 +541,9 @@ def get_disk_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_in_kpc
     mean_molecular_weight = density[disk] * unit_density / nTOT
     # print(f"Mean Molecular Weight: \nMean: {np.mean((mean_molecular_weight/constants.m_p).decompose())}, \nMax: {np.max((mean_molecular_weight/constants.m_p).decompose())}, \nMin: {np.min((mean_molecular_weight/constants.m_p).decompose())}")
     disk_temp = (2.0/3.0) * internal_energy[disk] * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
+    print('mean disk_temp (K): ', np.mean(disk_temp))
 
-    return disk_ndensity, disk_temp
+    return disk_mass, disk_ndensity, disk_temp
 
 def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100], xHe=0.1):
 
@@ -563,4 +578,47 @@ def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, 
     # set densities
     update_snapshot_property(filepath, 'PartType0', 'Density', density)
 
+
+def set_CGM_temperature(filepath, CGM_temp_K = 1e6, temp_threshold_K = 1e10, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100], xHe=0.1):
+
+    # load file
+    f = h5py.File(filepath, 'r+')
+
+    # get units
+    unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+    unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+    unit_length_in_kpc = unit_length / 3.0856e21
+    unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
+    unit_density = unit_mass / unit_length**3
+
+    # get gas properties
+    coords = np.array(f['PartType0']['Coordinates'])
+    density = np.array(f['PartType0']['Density'])
+    internal_energy = np.array(f['PartType0']['InternalEnergy'])
+    xH2, xHp, xCO = np.array(f['PartType0']['ChemicalAbundances']).T
+
+    boxsize = f['Header'].attrs['BoxSize']
+
+    f.close()
+
+    # get temperature
+    ndensity = density * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
+    xTOT = 1.0 + xHp - xH2 + xHe
+    nTOT = xTOT * ndensity
+    mean_molecular_weight = density * unit_density / nTOT
+    temperature = (2.0/3.0) * internal_energy * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
+
+    radii_in_kpc = np.array(radii_in_kpc)
+    half_heights_in_kpc = np.array(half_heights_in_kpc)
+
+    # get region outside disk
+    CGM = temp_mask(temperature, temp_threshold_K) & disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+    
+    print(f"CGM mask: {np.sum(CGM)} particles outside galactic disk over temperature threshold {temp_threshold_K} K")
+
+    # update temperature
+    internal_energy[CGM] = (3.0/2.0) * CGM_temp_K * constants.k_B.cgs.value / (unit_velocity**2 * mean_molecular_weight[CGM])
+
+    # set temperature
+    update_snapshot_property(filepath, 'PartType0', 'InternalEnergy', internal_energy)
 
