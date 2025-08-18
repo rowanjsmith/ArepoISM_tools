@@ -29,7 +29,7 @@ def fix_ics(filepath, newfilename=None, save_path=None, boxsize=1000, unit_lengt
         path = save_path
 
     # create new file
-    newfilepath = path + newfilename
+    newfilepath = path + '/' + newfilename
     newsnap = h5py.File(newfilepath, 'w')
     Header = newsnap.create_group('Header')
     part0 = newsnap.create_group('PartType0')
@@ -38,6 +38,7 @@ def fix_ics(filepath, newfilename=None, save_path=None, boxsize=1000, unit_lengt
 
     # read ics
     f = h5py.File(filepath, 'r')
+    print(newsnap)
 
     # Fix NumPart_ThisFile
     NumPart_ThisFile = f['Header'].attrs['NumPart_ThisFile']
@@ -85,7 +86,7 @@ def fix_ics(filepath, newfilename=None, save_path=None, boxsize=1000, unit_lengt
     newsnap.close()
 
     # Check
-    snap = h5py.File(newfilename, 'r')
+    snap = h5py.File(newfilepath, 'r')
 
     print('\nCheck new file header:')
     for item in snap['Header'].attrs:
@@ -630,7 +631,7 @@ def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, 
     half_heights_in_kpc = np.array(half_heights_in_kpc)
 
     # get region outside disk
-    CGM = dens_mask(density, unit_density, density_threshold_cgs) & cgm_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+    CGM = dens_mask(density, unit_density, density_threshold_cgs) & cgm_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc) 
     
     print(f"CGM mask: {np.sum(CGM)} particles outside galactic disk under density threshold {density_threshold_cgs} g/cm^3")
 
