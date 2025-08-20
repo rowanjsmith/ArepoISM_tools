@@ -779,7 +779,7 @@ def get_cgm_mass_ndensity_temp(filepath, radii_in_kpc = [20, 100], half_heights_
 
     return cgm_mass, cgm_ndensity, cgm_temp
 
-def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100], xHe=0.1):
+def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, radii_in_kpc = [20, 100], half_heights_in_kpc = [1, 100], xHe=0.1):
 
     # load file
     f = h5py.File(filepath, 'r+')
@@ -793,6 +793,7 @@ def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, 
     # get gas properties
     coords = np.array(f['PartType0']['Coordinates'])
     density = np.array(f['PartType0']['Density'])
+    mass = np.array(f['PartType0']['Masses'])
 
     boxsize = f['Header'].attrs['BoxSize']
 
@@ -806,11 +807,17 @@ def set_CGM_ndensity(filepath, CGM_ndensity=1e-4, density_threshold_cgs= 1e-37, 
     
     print(f"CGM mask: {np.sum(CGM)} particles outside galactic disk under density threshold {density_threshold_cgs} g/cm^3")
 
+    volume = mass[CGM] / density[CGM]
+
     # update densities
     density[CGM] = CGM_ndensity * ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value) / unit_density
 
-    # set densities
+    # update mass
+    mass[CGM] = density[CGM] * volume
+
+    # set properties
     update_snapshot_property(filepath, 'PartType0', 'Density', density)
+    update_snapshot_property(filepath, 'PartType0', 'Masses', mass)
 
 
 def set_CGM_temperature(filepath, CGM_temp_K = 1e6, temp_threshold_K = 1e10, radii_in_kpc = [20, 100], half_heights_in_kpc = [2, 100], xHe=0.1):
