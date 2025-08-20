@@ -38,7 +38,6 @@ def fix_ics(filepath, newfilename=None, save_path=None, boxsize=1000, unit_lengt
 
     # read ics
     f = h5py.File(filepath, 'r')
-    print(newsnap)
 
     # Fix NumPart_ThisFile
     NumPart_ThisFile = f['Header'].attrs['NumPart_ThisFile']
@@ -195,13 +194,13 @@ def check_ics(filepath, plots=True, boxsize=1000, unit_length=3.0856e20, unit_ma
                     plt.scatter(x, y)
                     plt.xlabel('X')
                     plt.ylabel('Y')
-                    plt.title('Gas particles')
+                    plt.title('Gas particles in the XY plane')
                     plt.show()
 
                     plt.scatter(x, z)
                     plt.xlabel('X')
                     plt.ylabel('Z')
-                    plt.title('Gas particles')
+                    plt.title('Gas particles in the XZ plane')
                     plt.show()
 
                 break
@@ -238,23 +237,31 @@ def add_snapshot_property(filepath: str,
 def update_snapshot_property(filepath: str,
                              snap_group: str,
                              property: str,
-                             data):
+                             data,
+                             safe_mode=True):
     # write to hdf5 file
     with h5py.File(filepath, 'r+') as f:
         if snap_group in f.keys():
             if property in f[snap_group]:
-                if not len(f[snap_group][property]) == len(data):
-                    if snap_group == ('Config' or 'Header' or 'Parameters'):
-                        warnings.warn(f"Existing {property} data and new {property} data have different lengths.", UserWarning)
+                if not (np.shape(f[snap_group][property]) == np.shape(data)):
+                    if safe_mode is True:
+                        while True:
+                            answer = input(f"Existing {property} data and new {property} data have different shapes. {property} cannot be modified in place. Do you want to overwrite {property}? (y/n): ").strip().lower()
+                            if answer in ['y', 'yes']:
+                                del f[snap_group][property]
+                                f[snap_group].create_dataset(property, data=data)
+                                print(f"{property} successfully updated.")
+                                break
+                            elif answer in ['n', 'no']:
+                                print("Exiting...")
+                                break
+                            else:
+                                print("Please enter 'y' or 'n'.")
                     else:
-                        raise Exception(f"Existing {property} data and new {property} data must have the same length (corresponding to the number of cells in snapshot).")
-                # check for same shape
-                elif not np.shape(f[snap_group][property]) == np.shape(data):
-                    warnings.warn(f"Existing {property} data and new {property} data have different shapes. {property} cannot be modified in place and will be overwritten.", UserWarning)
-                    del f[snap_group][property]
-                    f[snap_group].create_dataset(property, data=data)
+                        del f[snap_group][property]
+                        f[snap_group].create_dataset(property, data=data)
+                        print(f"{property} successfully updated.")
 
-                    print(f"{property} successfully updated.")
                 else:
                     # Overwrite existing dataset with new data
                     f[snap_group][property][:] = data  # Modify in place
@@ -262,6 +269,9 @@ def update_snapshot_property(filepath: str,
                     # f.flush()
 
                     print(f"{property} successfully updated.")
+            elif property in f[snap_group].attrs:
+                f[snap_group].attrs[property] = data
+                
             else:
                 raise Exception(f"{property} not found in {snap_group}.")
         else:
@@ -282,31 +292,63 @@ def add_bh_particle(filepath, bh_mass_in_Msun=None):
     bh_mass : _type_, optional
         _description_, by default None
     """
+    if bh_mass_in_Msun==None:
+            # set black hole mass according to Reines and Volonteri 2015 (https://arxiv.org/pdf/1508.06274)
+            try:
+                stellar_mass = sum(f['PartType2']['Masses'])*(f['Parameters'].attrs['UnitMass_in_g']/1.991E33)
+            except KeyError:
+                stellar_mass = sum(f['PartType2']['Masses'])*(f['Header'].attrs['UnitMass_in_g']/1.991E33)
+            bh_mass_in_Msun = 10**(7.45 + 1.05 * np.log10(stellar_mass / 1e11))
+            print(f"Black hole mass set to {bh_mass_in_Msun:.2e} M_sun")
+
+    def add_bh(f, bh_mass_in_Msun):
+        # Find dm particle closest to the center
+        hx, hy, hz = np.array(f['PartType1']['Coordinates']).T
+        try:
+            boxsize = f['Parameters'].attrs['BoxSize']
+        except KeyError:
+            boxsize = f['Header'].attrs['BoxSize']
+        center = boxsize / 2
+        bh = np.argmin(np.abs(hx - center) + np.abs(hy - center) + np.abs(hz - center))
+
+        # Re-center the dm particle
+        f['PartType1']['Coordinates'][bh] = [center, center, center]
+        # set the velocity of the black hole to zero
+        f['PartType1']['Velocities'][bh] = [0.0, 0.0, 0.0]
+        # Add mass to the dm particle to account for the mass of the black hole
+        try:
+            f['PartType1']['Masses'][bh] += bh_mass_in_Msun/(f['Parameters'].attrs['UnitMass_in_g']/1.991E33)
+        except KeyError:
+            f['PartType1']['Masses'][bh] += bh_mass_in_Msun/(f['Header'].attrs['UnitMass_in_g']/1.991E33)
+
+        print('Hacky black hole fix completed! Halo particle at the center of the box with additional mass:', bh_mass_in_Msun, 'M_sun')
+
     f = h5py.File(filepath, 'r+')
 
-    if bh_mass_in_Msun==None:
-        # set black hole mass according to Reines and Volonteri 2015 (https://arxiv.org/pdf/1508.06274)
-        stellar_mass = sum(f['PartType2']['Masses'])*(f['Header'].attrs['UnitMass_in_g']/1.991E33)
-        bh_mass_in_Msun = 10**(7.45 + 1.05 * np.log10(stellar_mass / 1e11))
-        print(f"Black hole mass set to {bh_mass_in_Msun:.2e} M_sun")
+    try:
+        dm_mass = np.mean(f['PartType1']['Masses'])*(f['Parameters'].attrs['UnitMass_in_g']/1.991E33)
+        bh_candidate = np.max(f['PartType1']['Masses'])*(f['Parameters'].attrs['UnitMass_in_g']/1.991E33)
+    except KeyError:
+        dm_mass = np.mean(f['PartType1']['Masses'])*(f['Header'].attrs['UnitMass_in_g']/1.991E33)
+        bh_candidate = np.max(f['PartType1']['Masses'])*(f['Header'].attrs['UnitMass_in_g']/1.991E33)
 
-    # Find dm particle closest to the center
-    hx, hy, hz = np.array(f['PartType1']['Coordinates']).T
-    boxsize = f['Header'].attrs['BoxSize']
-    center = boxsize / 2
-    bh = np.argmin(np.abs(hx - center) + np.abs(hy - center) + np.abs(hz - center))
+    # warn user of existing black hole particle
+    if bh_candidate > (dm_mass + 3): # G3425 candidate black hole has mass of 3.6 Msun
+        while True:
+            answer = input(f"A dark matter particle was found with a mass of {bh_candidate} M_sun compared to the average mass of {dm_mass} M_sun. Do you still want to add a black hole particle? (y/n): ").strip().lower()
+            if answer in ['y', 'yes']:
+                add_bh(f, bh_mass_in_Msun)
 
-    # Re-center the dm particle
-    f['PartType1']['Coordinates'][bh] = [center, center, center]
-    # set the velocity of the black hole to zero
-    f['PartType1']['Velocities'][bh] = [0.0, 0.0, 0.0]
-    # Add mass to the dm particle to account for the mass of the black hole
-    f['PartType1']['Masses'][bh] += bh_mass_in_Msun/(f['Header'].attrs['UnitMass_in_g']/1.991E33)
+                break
+            elif answer in ['n', 'no']:
+                print("Exiting...")
+                break
+            else:
+                print("Please enter 'y' or 'n'.")
+    else:
+        add_bh(f, bh_mass_in_Msun)
     
     f.close()
-
-    print('Hacky black hole fix completed!')
-
 
 
 def add_dust_temperature(filepath, dust_temperature_in_K=2.0):
@@ -318,7 +360,11 @@ def add_dust_temperature(filepath, dust_temperature_in_K=2.0):
 
     # set the same dust temperature for all particles
     dust_temperature = np.array([dust_temperature_in_K] * len(f['PartType0']['ParticleIDs']))
-    add_snapshot_property(filepath, 'PartType0', 'DustTemperature', dust_temperature)
+
+    if 'DustTemperature' in f['PartType0']:
+        update_snapshot_property(filepath, 'PartType0', 'DustTemperature', dust_temperature)
+    else:
+        add_snapshot_property(filepath, 'PartType0', 'DustTemperature', dust_temperature)
 
     f.close()
 
@@ -333,7 +379,10 @@ def add_chem_abundances(filepath, chem_abundances='NL97'):
     # chemical abundances are specified directly
     if isinstance(chem_abundances, list):
         chem_abundances = np.array([chem_abundances] * len(f['PartType0']['ParticleIDs']))
-        add_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
+        if 'ChemicalAbundances' in f['PartType0']:
+            update_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
+        else:
+            add_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
 
     # use standard chemical abundances for a given network
     else:
@@ -350,15 +399,18 @@ def add_chem_abundances(filepath, chem_abundances='NL97'):
         # NL97 (network 5)
         if chem_abundances in ['nl97', 'nl1997', 'nelson langer 1997', 'nelson langer 97', 'nelson and langer 1997', 'nelson and langer 97', 'network 5', 'network5', 'sgchem network 5']:
             chem_abundances = np.array([[0, 1.0e-02, 0]] * len(f['PartType0']['ParticleIDs']))
-            add_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
 
         # Gong (network 16)
         elif chem_abundances in ['gong', 'gong18', 'gong2018', 'gong et al 2018', 'gong et al 18', 'gong et al. 2018', 'gong et al. 18', 'network 16', 'network16', 'sgchem network 16']:
             chem_abundances = np.array([[0, 1.0e-02, 1.5e-05, 0, 0, 0, 0, 0, 0]] * len(f['PartType0']['ParticleIDs']))
-            add_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
 
         else:
             raise ValueError("Unknown chemical network: Available networks are NL97 (network 5) and Gong (network 16). Or, specify the abundances directly as a list.")
+
+        if 'ChemicalAbundances' in f['PartType0']:
+            update_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
+        else:
+            add_snapshot_property(filepath, 'PartType0', 'ChemicalAbundances', chem_abundances)
 
     f.close()
 
@@ -374,7 +426,11 @@ def add_magnetic_field(filepath, B0_in_gauss=1e-6, direction='toroidal'):
 
     # generate magnetic field
     mag_field = generate_magnetic_field(f['PartType0']['Coordinates'], boxsize=boxsize, B0=B0_in_gauss, direction=direction)
-    add_snapshot_property(filepath, 'PartType0', 'MagneticField', mag_field)
+
+    if 'MagneticField' in f['PartType0']:
+        update_snapshot_property(filepath, 'PartType0', 'MagneticField', mag_field)
+    else:
+        add_snapshot_property(filepath, 'PartType0', 'MagneticField', mag_field)
 
     f.close()
 
@@ -416,7 +472,12 @@ def generate_magnetic_field(points: np.ndarray,
     x, y, z = np.array(points).T
     c = boxsize/2
     if direction == 'toroidal':
-        r = np.sqrt((x-c)**2 + (y-c)**2)
+        if x.min() < 0 and (np.average(x) > -10 and np.average(x) < 10):
+            r = np.sqrt(x**2 + y**2)
+            print('Coordinates already centered.')
+        else:
+            r = np.sqrt((x-c)**2 + (y-c)**2)
+            print('Re-centering coordinates.')
         r[r == 0] = 1e-10           # Prevent singularity at r = 0
         bx = -B0 * (y-c)/r       # sin(arctan(y/x)) = y/sqrt((x**2 + y**2)
         by = B0 * (x-c)/r        # cos(arctan(y/x)) = x/sqrt(x**2 + y**2)
@@ -479,7 +540,7 @@ def temp_mask(temperatures, temperature_threshold = 1e10):
 
     return mask
 
-def get_number_density():
+def get_number_density(density_in_cgs, xHe=0.1):
     """
     Calculates number density using 
     :math:'n = \\frac{\\rho}{(1+4x_\\mathrm{He})m_\\mathrm{p}}'.
@@ -500,9 +561,7 @@ def get_number_density():
         Number density :math:'n'.
 
     """
-    density = self.density.to(u.g/u.cm**3)
-    xHe = 0.1 if (self.xHe is None) else self.xHe
-    ndensity = density/((1.0 + 4.0 * xHe) * constants.m_p.cgs)
+    ndensity = density_in_cgs/((1.0 + 4.0 * xHe) * constants.m_p.cgs)
 
     return ndensity
 
@@ -557,6 +616,112 @@ def get_disk_mass_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_i
 
     return disk_mass, disk_ndensity, disk_temp
 
+
+def get_sim_mass_ndensity_temp(filepath, radii_in_kpc=[0, 300], half_heights_in_kpc=[0, 200], xHe=0.1):
+    """
+    Get the number density per cubic cm and temperature in Kelvin of the disk.
+    Handles NaNs in mass, density, and internal energy (temperature).
+    """
+    # load file
+    f = h5py.File(filepath, 'r+')
+
+    # get units
+    try:
+        unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+        unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+        unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
+    except KeyError:
+        unit_mass = f['Header'].attrs['UnitMass_in_g']
+        unit_length = f['Header'].attrs['UnitLength_in_cm']
+        unit_velocity = f['Header'].attrs['UnitVelocity_in_cm_per_s']
+
+    unit_mass_in_solmass = unit_mass / 1.9884e33
+    unit_length_in_kpc = unit_length / 3.0856e21
+    unit_density = unit_mass / unit_length**3
+
+    # get gas properties
+    coords = np.array(f['PartType0']['Coordinates'])
+    mass = np.array(f['PartType0']['Masses'])
+    density = np.array(f['PartType0']['Density'])
+    internal_energy = np.array(f['PartType0']['InternalEnergy'])
+    xH2, xHp, xCO = np.array(f['PartType0']['ChemicalAbundances']).T
+
+    boxsize = f['Header'].attrs['BoxSize']
+    f.close()
+
+    # ---- Handle NaNs ----
+    for name, arr in zip(["Mass", "Density", "InternalEnergy"], [mass, density, internal_energy]):
+        nan_mask = np.isnan(arr)
+        n_nans = np.sum(nan_mask)
+        print(f"{name}: found {n_nans} NaN values")
+
+        inf_mask = np.isinf(arr)
+        n_infs = np.sum(inf_mask)
+        print(f"{name}: found {n_infs} Inf values")
+
+        if n_nans > 0:
+            # Plot XY and XZ planes
+            plt.figure(figsize=(10, 4))
+            plt.subplot(1, 2, 1)
+            plt.scatter(coords[nan_mask, 0], coords[nan_mask, 1], s=2, color="red")
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title(f"{name} NaN positions (XY plane)")
+            plt.axis("equal")
+
+            plt.subplot(1, 2, 2)
+            plt.scatter(coords[nan_mask, 0], coords[nan_mask, 2], s=2, color="red")
+            plt.xlabel("X")
+            plt.ylabel("Z")
+            plt.title(f"{name} NaN positions (XZ plane)")
+            plt.axis("equal")
+            plt.show()
+
+        if n_infs > 0:
+            # Plot XY and XZ planes
+            plt.figure(figsize=(10, 4))
+            plt.subplot(1, 2, 1)
+            plt.scatter(coords[inf_mask, 0], coords[inf_mask, 1], s=2, color="blue")
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title(f"{name} Inf positions (XY plane)")
+            plt.axis("equal")
+
+            plt.subplot(1, 2, 2)
+            plt.scatter(coords[inf_mask, 0], coords[inf_mask, 2], s=2, color="blue")
+            plt.xlabel("X")
+            plt.ylabel("Z")
+            plt.title(f"{name} Inf positions (XZ plane)")
+            plt.axis("equal")
+            plt.show()
+
+
+    # ensure NaN-safe calculations
+    radii_in_kpc = np.array(radii_in_kpc)
+    half_heights_in_kpc = np.array(half_heights_in_kpc)
+
+    # get disk
+    disk = disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
+
+    # get mass of disk
+    disk_mass = np.nansum(mass[disk]) * unit_mass_in_solmass
+    print("Total mass (M_sun): ", disk_mass)
+
+    # get density of disk
+    disk_ndensity = density[disk] * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
+    print("mean density (g cm-3): ", np.nanmean(density[disk] * unit_density))
+    print("mean ndensity (cm-3): ", np.nanmean(disk_ndensity))
+
+    # get temperature of disk
+    xTOT = 1.0 + xHp[disk] - xH2[disk] + xHe
+    nTOT = xTOT * disk_ndensity
+    mean_molecular_weight = density[disk] * unit_density / nTOT
+    disk_temp = (2.0/3.0) * internal_energy[disk] * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
+    print("mean temp (K): ", np.nanmean(disk_temp))
+
+    return disk_mass, disk_ndensity, disk_temp
+
+
 def get_cgm_mass_ndensity_temp(filepath, radii_in_kpc = [20, 100], half_heights_in_kpc = [1, 50], xHe=0.1):
     """
     Get the number density per cubic cm and temperature in Kelvin of the disk.
@@ -565,11 +730,17 @@ def get_cgm_mass_ndensity_temp(filepath, radii_in_kpc = [20, 100], half_heights_
     f = h5py.File(filepath, 'r+')
 
     # get units
-    unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+    try:
+        unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+        unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+        unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
+    except KeyError:
+        unit_mass = f['Header'].attrs['UnitMass_in_g']
+        unit_length = f['Header'].attrs['UnitLength_in_cm']
+        unit_velocity = f['Header'].attrs['UnitVelocity_in_cm_per_s']
+        
     unit_mass_in_solmass = unit_mass / 1.9884e33
-    unit_length = f['Parameters'].attrs['UnitLength_in_cm']
     unit_length_in_kpc = unit_length / 3.0856e21
-    unit_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
     unit_density = unit_mass / unit_length**3
 
     # get gas properties
@@ -685,3 +856,150 @@ def set_CGM_temperature(filepath, CGM_temp_K = 1e6, temp_threshold_K = 1e10, rad
     # set temperature
     update_snapshot_property(filepath, 'PartType0', 'InternalEnergy', internal_energy)
 
+
+def add_background_grid(filepath, disk_radius_in_kpc, disk_height_in_kpc, ndensity_per_cm3=1e-8, grid_size=32, boxsize=1000, margin=20, xHe=0.1):
+    """ Add a background grid to the snapshot file and center cells on boxsize/2 instead of zero (equivalently to shift_by_halfbox).
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the snapshot file.
+    disk_radius_in_kpc : float
+        Radius of the disk in kpc.
+    disk_height_in_kpc : float
+        Height of the disk in kpc.
+    grid_size : int, optional
+        Size of the grid, by default 32.
+    boxsize : float, optional
+        Size of the box in code units, by default 1000.
+    """
+
+    # add safeguard to check if file is IC by checking for Density in PartType0
+    # add safeguard to check if file already has a background grid
+        
+    if margin < 10:
+        raise Exception("Margin must be at least 10 code units to avoid issues with mesh construction at boundaries.")
+    
+    xgrid = np.linspace(margin, boxsize - margin, grid_size)
+    ygrid = np.linspace(margin + 2, boxsize - margin + 2, grid_size) # voronoi construction doesn't like regular grids
+    zgrid = np.linspace(margin + 1, boxsize - margin + 1, grid_size)
+
+    # Create a meshgrid for the coordinates
+    X, Y, Z = np.meshgrid(xgrid, ygrid, zgrid, indexing='ij')
+
+    # Flatten the arrays to create a list of coordinates
+    grid_coords = np.column_stack((X.flatten(), Y.flatten(), Z.flatten()))
+
+    f = h5py.File(filepath, 'r+')
+
+    try:
+        unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+        unit_mass = f['Parameters'].attrs['UnitMass_in_g']
+    except KeyError:
+        unit_length = f['Header'].attrs['UnitLength_in_cm']
+        unit_mass = f['Header'].attrs['UnitMass_in_g']
+
+    max_id = np.max(f['PartType0']['ParticleIDs'])
+    
+    unit_density = unit_mass / unit_length**3
+    unit_mass_in_solMass = unit_mass / 1.9884e33
+
+    # Convert disk radius and height from kpc to code units
+    disk_radius = disk_radius_in_kpc * 3.0856e21 / unit_length
+    disk_height = disk_height_in_kpc * 3.0856e21 / unit_length
+
+    # update densities
+    grid_density = ndensity_per_cm3 * ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value) / unit_density
+    grid_volume = (boxsize / grid_size) ** 3
+    grid_mass = grid_density * grid_volume
+
+    # remove coordinates in the disk
+    disk_mask = ((np.sqrt((grid_coords[:, 0] - boxsize/2)**2 + (grid_coords[:, 1] - boxsize/2)**2) < disk_radius) &
+                 (np.abs(grid_coords[:, 2] - boxsize/2) < disk_height))
+
+    # grid_coords = grid_coords[~disk_mask] # not sure this is a good idea as it would create an outward force on the disk particles
+    grid_masses = grid_mass * np.ones(len(grid_coords))
+    grid_velocities = np.zeros_like(grid_coords)  # Assuming zero velocity for the background grid
+    grid_ids = np.arange(len(grid_coords)) + max_id + 1  # Assign new IDs starting from max_id + 1
+
+    # Check if coordinates are centered around boxsize/2
+    coords = np.array(f['PartType0']['Coordinates'])
+    if (np.average(coords[:, 0]) > -10) and (np.average(coords[:, 0]) < 10):
+        print("Shifting coordinates to center on boxsize/2.")
+        coords += boxsize / 2
+
+    gas_masses = np.array(f['PartType0']['Masses'])
+    coords = np.concatenate((coords, grid_coords))
+    masses = np.concatenate((gas_masses, grid_masses))
+    velocities = np.concatenate((f['PartType0']['Velocities'], grid_velocities))
+    parttype0_ids = np.concatenate((f['PartType0']['ParticleIDs'], grid_ids))
+    parttype1_ids = np.array(f['PartType1']['ParticleIDs']) + len(grid_masses)
+    parttype2_ids = np.array(f['PartType2']['ParticleIDs']) + len(grid_masses)
+
+    NumPart_ThisFile = f['Header'].attrs['NumPart_ThisFile']
+    NumPart_ThisFile[0] = len(parttype0_ids)
+
+    f.close()
+
+    update_snapshot_property(filepath, 'Header', 'NumPart_ThisFile', NumPart_ThisFile)
+    update_snapshot_property(filepath, 'Header', 'NumPart_Total', NumPart_ThisFile)
+    update_snapshot_property(filepath, 'PartType0', 'Coordinates', coords, safe_mode=False)
+    update_snapshot_property(filepath, 'PartType0', 'Masses', masses, safe_mode=False)
+    update_snapshot_property(filepath, 'PartType0', 'Velocities', velocities, safe_mode=False)
+    update_snapshot_property(filepath, 'PartType0', 'ParticleIDs', parttype0_ids, safe_mode=False)
+    update_snapshot_property(filepath, 'PartType1', 'ParticleIDs', parttype1_ids)
+    update_snapshot_property(filepath, 'PartType2', 'ParticleIDs', parttype2_ids)
+
+    print(f"Mass added with background grid: {np.sum(grid_masses) * unit_mass_in_solMass:.2f} Msun. Percentage of galaxy gas mass: {np.sum(grid_masses) / np.sum(gas_masses) * 100:.4f}%")
+
+
+def plot_field(filepath, plane='XY'):
+    """
+    Plot a 2D quiver plot of the magnetic field in the chosen plane.
+    plane: 'XY', 'XZ', or 'YZ'
+    """
+    f = h5py.File(filepath, 'r')
+
+    unit_length_in_kpc = f['Parameters'].attrs['UnitLength_in_cm'] / 3.0856e21
+    x, y, z = (np.array(f['PartType0']['Coordinates'][::100]).T) * unit_length_in_kpc
+
+    try:
+        Bx, By, Bz = (np.array(f['PartType0']['MagneticField'][::100]).T)#  * 1e-6  # Convert to Gauss
+    except KeyError:
+        raise Exception("Magnetic field data not found in the file. Add a magnetic field with ic_tools.add_magnetic_field(file).")
+    
+    f.close()
+
+    # Compute average magnitude of B
+    B_magnitude = np.sqrt(Bx**2 + By**2 + Bz**2)
+    avg_B = np.mean(B_magnitude)
+    print(f"Average magnetic field magnitude: {avg_B} G")
+
+    if plane.upper() == 'XY':
+        plt.figure(figsize=(6,6))
+        plt.quiver(x, y, Bx, By, color='blue')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.title('Magnetic Field in XY Plane')
+        plt.axis('equal')
+
+    elif plane.upper() == 'XZ':
+        plt.figure(figsize=(6,6))
+        plt.quiver(x, z, Bx, Bz, color='red')
+        plt.xlabel('X')
+        plt.ylabel('Z')
+        plt.title('Magnetic Field in XZ Plane')
+        plt.axis('equal')
+
+    elif plane.upper() == 'YZ':
+        plt.figure(figsize=(6,6))
+        plt.quiver(y, z, By, Bz, color='green')
+        plt.xlabel('Y')
+        plt.ylabel('Z')
+        plt.title('Magnetic Field in YZ Plane')
+        plt.axis('equal')
+
+    else:
+        raise ValueError("Plane must be 'XY', 'XZ', or 'YZ'")
+
+    plt.show()

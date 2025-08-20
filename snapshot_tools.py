@@ -153,6 +153,13 @@ class Snapshot:
             self.coordinates_type4 = file['PartType4']['Coordinates'] << self.arepo_length
             self.velocity_type4 = file['PartType4']['Velocities'] << self.arepo_velocity
             self.mass_type4 = file['PartType4']['Masses'] << self.arepo_mass
+
+            if 'TracerField' in file['PartType4']:
+                self.has_tracer_field_type4 = True
+                self.tracer_field_type4 = file['PartType4']['TracerField'][()]  # Eagerly read (i.e. load into memory)
+            else:
+                self.has_tracer_field_type4 = False
+                self.tracer_field_type4 = None
         else:
             self.has_type_4 = False
 
@@ -406,17 +413,23 @@ def print_snap_info(filepath: str):
         The path to the HDF5 file.
     """
     with h5py.File(filepath, 'r') as file:
-        print("\nCONFIG")
-        for item in file['Config'].attrs:
-            print(item, file['Config'].attrs[item])
+        if 'Config' not in file.keys():
+            print("\nNo 'Config' group found in the file.")
+        else:
+            print("\nCONFIG")
+            for item in file['Config'].attrs:
+                print(item, file['Config'].attrs[item])
 
         print("\nHEADER")
         for item in file['Header'].attrs:
             print(item, file['Header'].attrs[item])
 
-        print("\nPARAMETERS")
-        for item in file['Parameters'].attrs:
-            print(item, file['Parameters'].attrs[item])
+        if 'Parameters' not in file.keys():
+            print("\nNo 'Parameters' group found in the file.")
+        else:
+            print("\nPARAMETERS")
+            for item in file['Parameters'].attrs:
+                print(item, file['Parameters'].attrs[item])
 
         for key in file.keys():
             if key[0:8] == 'PartType':  # Skip 'Config', 'Header', and 'Parameters'
@@ -425,7 +438,44 @@ def print_snap_info(filepath: str):
                 except AttributeError:
                     print(f"\n{key} doesn't have keys")
 
+        print(stats_description(np.array(file['PartType0']['Masses'])))
+
         if (np.array(file['PartType0']['ParticleIDs']) == 0).any():
             print("PartType0 ParticleID is 0 at index: ", np.where(np.array(file['PartType0']['ParticleIDs']) == 0))
+
+        if (np.array(file['PartType0']['Masses']) == 0).any():
+            print(f"PartType0 Mass is 0 for {np.sum(np.where(np.array(file['PartType0']['Masses']) == 0))} cells.")
+
+            zero_mask = np.where(np.array(file['PartType0']['Masses']) == 0)
+            coords = np.array(file['PartType0']['Coordinates'])
+
+            # Plot XY and XZ planes
+            plt.figure(figsize=(12, 6))
+            plt.subplot(1, 2, 1)
+            plt.scatter(coords[zero_mask, 0], coords[zero_mask, 1], s=2, color="red")
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title("Cells with mass zero (XY plane)")
+            plt.axis("equal")
+
+            plt.subplot(1, 2, 2)
+            plt.scatter(coords[zero_mask, 0], coords[zero_mask, 2], s=2, color="red")
+            plt.xlabel("X")
+            plt.ylabel("Z")
+            plt.title("Cells with mass zero (XZ plane)")
+            plt.axis("equal")
+            plt.show()
+
+        if (np.array(file['PartType0']['Masses']) < 0).any():
+            print(f"PartType0 Mass is negative for {np.sum(np.where(np.array(file['PartType0']['Masses']) < 0))} cells.")
+
+        if (np.array(file['PartType0']['Masses']) > 0).any():
+            print(f"PartType0 Mass is positive for {np.sum(np.where(np.array(file['PartType0']['Masses']) > 0))} cells.")
+
+        if (np.isnan(np.array(file['PartType0']['Masses']))).any():
+            print(f"PartType0 Mass is NaN for {np.sum(np.where(np.isnan(np.array(file['PartType0']['Masses']))))} cells.")
+
+        if (np.isinf(np.array(file['PartType0']['Masses']))).any():
+            print(f"PartType0 Mass is Inf for {np.sum(np.where(np.isinf(np.array(file['PartType0']['Masses']))))} cells.")
 
         file.close()
