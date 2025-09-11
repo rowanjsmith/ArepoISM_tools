@@ -31,7 +31,7 @@ snap = Snapshot(filepath)
 print(f"Snapshot time: {snap.time.to_value(u.Myr)} Myr")
 print(snap.time.to(snap.arepo_time))
 
-# Specify the extend of the disk in your snapshot
+# Specify the extent of the disk in your snapshot
 # You can get an idea of the size of your disk by plotting the whole box initially. Try:
 # plot.column_density_hist(snap, save_path=save_path)
 # THESE QUANTITIES MUST HAVE UNITS OF LENGTH (use astropy quantities as shown here)

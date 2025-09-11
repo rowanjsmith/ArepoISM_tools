@@ -477,7 +477,7 @@ def generate_magnetic_field(points: np.ndarray,
             print('Coordinates already centered.')
         else:
             r = np.sqrt((x-c)**2 + (y-c)**2)
-            print('Re-centering coordinates.')
+            # print('Re-centering coordinates.')
         r[r == 0] = 1e-10           # Prevent singularity at r = 0
         bx = -B0 * (y-c)/r       # sin(arctan(y/x)) = y/sqrt((x**2 + y**2)
         by = B0 * (x-c)/r        # cos(arctan(y/x)) = x/sqrt(x**2 + y**2)
@@ -539,6 +539,31 @@ def temp_mask(temperatures, temperature_threshold = 1e10):
     print(f"Temperature mask: {np.sum(mask)} particles in region with temperature above {temperature_threshold} K")
 
     return mask
+
+def stats_description(array):
+    """
+    Returns a string with the mean, median, min, and max of an array.
+    
+    Parameters
+    ----------
+    array : np.ndarray
+        The array to calculate statistics for.
+    
+    Returns
+    -------
+    str
+        A string with the statistics.
+    """
+    mean = np.mean(array)
+    median = np.median(array)
+    min_val = np.min(array)
+    max_val = np.max(array)
+    first_quartile = np.percentile(array, 25)
+    third_quartile = np.percentile(array, 75)
+    std_dev = np.std(array)
+    
+    return f'Mean: {mean}, Std Dev: {std_dev}, Median: {median}, Min: {min_val}, Max: {max_val}, First Quartile: {first_quartile}, Third Quartile: {third_quartile}'
+
 
 def get_number_density(density_in_cgs, xHe=0.1):
     """
@@ -617,10 +642,9 @@ def get_disk_mass_ndensity_temp(filepath, radii_in_kpc = [0, 15], half_heights_i
     return disk_mass, disk_ndensity, disk_temp
 
 
-def get_sim_mass_ndensity_temp(filepath, radii_in_kpc=[0, 300], half_heights_in_kpc=[0, 200], xHe=0.1):
+def check_sim_integrity(filepath, show_stats=False, xHe=0.1):
     """
-    Get the number density per cubic cm and temperature in Kelvin of the disk.
-    Handles NaNs in mass, density, and internal energy (temperature).
+    Get diagnostic properties and find non-finite values (NaNs and infs).
     """
     # load file
     f = h5py.File(filepath, 'r+')
@@ -637,89 +661,128 @@ def get_sim_mass_ndensity_temp(filepath, radii_in_kpc=[0, 300], half_heights_in_
 
     unit_mass_in_solmass = unit_mass / 1.9884e33
     unit_length_in_kpc = unit_length / 3.0856e21
+    unit_velocity_in_km_s = unit_velocity / 1e5
     unit_density = unit_mass / unit_length**3
+    unit_density_in_solmass_per_kpc3 = unit_mass_in_solmass / (unit_length_in_kpc**3)
+
+    coords = np.array(f['PartType0']['Coordinates'])
+
+    problematic_properties = {}
 
     # get gas properties
-    coords = np.array(f['PartType0']['Coordinates'])
+    for property in f['PartType0']:
+        data = np.array(f['PartType0'][property])
+
+        infinite = np.isinf(data)
+        nan = np.isnan(data)
+        # collapse to 1D mask per particle
+        if infinite.ndim > 1:
+            infinite = np.any(infinite, axis=1)
+        if nan.ndim > 1:
+            nan = np.any(nan, axis=1)
+
+        invalid = infinite | nan
+        if np.sum(invalid) > 0:
+            problematic_properties[property] = np.sum(invalid)
+            print(f"Property '{property}' has {np.sum(infinite)} infinite values.")
+            # Plot XY and XZ planes
+            plt.figure(figsize=(10, 10))
+            plt.subplot(2, 2, 1)
+            plt.scatter(coords[:, 0][infinite], coords[:, 1][infinite], s=2, color="blue")
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title(f"{property} Inf positions (XY plane)")
+            plt.axis("equal")
+
+            plt.subplot(2, 2, 2)
+            plt.scatter(coords[:, 0][nan], coords[:, 1][nan], s=2, color="red")
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.title(f"{property} NaN positions (XY plane)")
+            plt.axis("equal")
+
+            plt.subplot(2, 2, 3)
+            plt.scatter(coords[:, 0][infinite], coords[:, 2][infinite], s=2, color="blue")
+            plt.xlabel("X")
+            plt.ylabel("Z")
+            plt.title(f"{property} Inf positions (XZ plane)")
+            plt.axis("equal")
+
+            plt.subplot(2, 2, 4)
+            plt.scatter(coords[:, 0][nan], coords[:, 2][nan], s=2, color="red")
+            plt.xlabel("X")
+            plt.ylabel("Z")
+            plt.title(f"{property} NaN positions (XZ plane)")
+            plt.axis("equal")
+            plt.show()
+    
     mass = np.array(f['PartType0']['Masses'])
-    density = np.array(f['PartType0']['Density'])
-    internal_energy = np.array(f['PartType0']['InternalEnergy'])
-    xH2, xHp, xCO = np.array(f['PartType0']['ChemicalAbundances']).T
+    velocities = np.array(f['PartType0']['Velocities'])
+    if 'Density' in f['PartType0']:
+        density = np.array(f['PartType0']['Density'])
+        has_density = True
+    if 'InternalEnergy' in f['PartType0']:
+        internal_energy = np.array(f['PartType0']['InternalEnergy'])
+        has_internal_energy = True
+    if 'ChemicalAbundances' in f['PartType0']:
+        xH2, xHp, xCO = np.array(f['PartType0']['ChemicalAbundances']).T
+        has_chemical_abundances = True
 
     boxsize = f['Header'].attrs['BoxSize']
     f.close()
 
-    # ---- Handle NaNs ----
-    for name, arr in zip(["Mass", "Density", "InternalEnergy"], [mass, density, internal_energy]):
-        nan_mask = np.isnan(arr)
-        n_nans = np.sum(nan_mask)
-        print(f"{name}: found {n_nans} NaN values")
+    print(f"Box size: {boxsize}")
 
-        inf_mask = np.isinf(arr)
-        n_infs = np.sum(inf_mask)
-        print(f"{name}: found {n_infs} Inf values")
+    print(f"\nTotal mass: {np.nansum(mass) * unit_mass_in_solmass} M_sol")
+    if show_stats:
+        print(stats_description(mass * unit_mass_in_solmass))
 
-        if n_nans > 0:
-            # Plot XY and XZ planes
-            plt.figure(figsize=(10, 4))
-            plt.subplot(1, 2, 1)
-            plt.scatter(coords[nan_mask, 0], coords[nan_mask, 1], s=2, color="red")
-            plt.xlabel("X")
-            plt.ylabel("Y")
-            plt.title(f"{name} NaN positions (XY plane)")
-            plt.axis("equal")
+    print(f"\nMean velocity: {np.nanmean(np.linalg.norm(velocities, axis=1) * unit_velocity_in_km_s)} km/s")
+    if show_stats:
+        print(stats_description(np.linalg.norm(velocities, axis=1) * unit_velocity_in_km_s))
 
-            plt.subplot(1, 2, 2)
-            plt.scatter(coords[nan_mask, 0], coords[nan_mask, 2], s=2, color="red")
-            plt.xlabel("X")
-            plt.ylabel("Z")
-            plt.title(f"{name} NaN positions (XZ plane)")
-            plt.axis("equal")
-            plt.show()
+    if has_density:
+        ndensity = density * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
+        print(f"\nMean density: {np.nanmean(density * unit_density)} g/cm3")
+        if show_stats:
+            print(stats_description(density * unit_density))
+        print(f"\nMean number density: {np.nanmean(ndensity)} /cm3")
+        if show_stats:
+            print(stats_description(ndensity))
 
-        if n_infs > 0:
-            # Plot XY and XZ planes
-            plt.figure(figsize=(10, 4))
-            plt.subplot(1, 2, 1)
-            plt.scatter(coords[inf_mask, 0], coords[inf_mask, 1], s=2, color="blue")
-            plt.xlabel("X")
-            plt.ylabel("Y")
-            plt.title(f"{name} Inf positions (XY plane)")
-            plt.axis("equal")
+        # use reasonable units for division to prevent overflow runtime warning
+        cell_volume = mass * unit_mass_in_solmass / (density * unit_density_in_solmass_per_kpc3)
+        effective_cell_radius = 3 * cell_volume / ((4 * np.pi)) ** (1/3)
+        print(f"\nMean effective cell radius: {np.nanmean(effective_cell_radius)} kpc")
+        if show_stats:
+            print(stats_description(effective_cell_radius))
+        print(f"\nMean cell volume: {np.nanmean(cell_volume)} kpc3")
+        if show_stats:
+            print(stats_description(cell_volume))
 
-            plt.subplot(1, 2, 2)
-            plt.scatter(coords[inf_mask, 0], coords[inf_mask, 2], s=2, color="blue")
-            plt.xlabel("X")
-            plt.ylabel("Z")
-            plt.title(f"{name} Inf positions (XZ plane)")
-            plt.axis("equal")
-            plt.show()
+    # get temperature
+    if has_density and has_internal_energy and has_chemical_abundances:
+        xTOT = 1.0 + xHp - xH2 + xHe
+        nTOT = xTOT * ndensity
+        mean_molecular_weight = density * unit_density / nTOT
+        temp = (2.0/3.0) * internal_energy * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
+        print(f"\nMean temperature: {np.nanmean(temp)} K")
+        if show_stats:
+            print(stats_description(temp))
 
+    for property, count in problematic_properties.items():
+        while True:
+            answer = input(f"Do you want to fix {count} invalid values from {property}? (y/n): ").strip().lower()
+            if answer in ['y', 'yes']:
+                fix_invalid_values(filepath, property)
+                print(f"Fixed {count} invalid values from {property}.")
+                break
+            elif answer in ['n', 'no']:
+                print("Keeping invalid values.")
+                break
+            else:
+                print("Please enter 'y' or 'n'.")
 
-    # ensure NaN-safe calculations
-    radii_in_kpc = np.array(radii_in_kpc)
-    half_heights_in_kpc = np.array(half_heights_in_kpc)
-
-    # get disk
-    disk = disk_mask(coords, boxsize, unit_length_in_kpc, radii_in_kpc, half_heights_in_kpc)
-
-    # get mass of disk
-    disk_mass = np.nansum(mass[disk]) * unit_mass_in_solmass
-    print("Total mass (M_sun): ", disk_mass)
-
-    # get density of disk
-    disk_ndensity = density[disk] * unit_density / ((1.0 + 4.0 * xHe) * constants.m_p.cgs.value)
-    print("mean density (g cm-3): ", np.nanmean(density[disk] * unit_density))
-    print("mean ndensity (cm-3): ", np.nanmean(disk_ndensity))
-
-    # get temperature of disk
-    xTOT = 1.0 + xHp[disk] - xH2[disk] + xHe
-    nTOT = xTOT * disk_ndensity
-    mean_molecular_weight = density[disk] * unit_density / nTOT
-    disk_temp = (2.0/3.0) * internal_energy[disk] * unit_velocity**2 * mean_molecular_weight / constants.k_B.cgs.value
-    print("mean temp (K): ", np.nanmean(disk_temp))
-
-    return disk_mass, disk_ndensity, disk_temp
 
 
 def get_cgm_mass_ndensity_temp(filepath, radii_in_kpc = [20, 100], half_heights_in_kpc = [1, 50], xHe=0.1):
@@ -862,6 +925,71 @@ def set_CGM_temperature(filepath, CGM_temp_K = 1e6, temp_threshold_K = 1e10, rad
 
     # set temperature
     update_snapshot_property(filepath, 'PartType0', 'InternalEnergy', internal_energy)
+
+
+def fix_invalid_values(filepath, property, bin=0.1):
+    """
+    Fix invalid values (NaN, Inf) in a specified property of the snapshot file by replacing the values with the radial average for that property.
+    
+    Parameters
+    ----------
+    filepath : str
+        Path to the snapshot file.
+    property : str
+        Name of the property to fix (e.g., 'Masses', 'Density', 'InternalEnergy').
+    """
+    f = h5py.File(filepath, 'r+')
+
+    # get units
+    try:
+        unit_length = f['Parameters'].attrs['UnitLength_in_cm']
+    except KeyError:
+        unit_length = f['Header'].attrs['UnitLength_in_cm']
+    unit_length_in_kpc = unit_length / 3.0856e21
+
+    boxsize = f['Header'].attrs['BoxSize']
+    
+    if property not in f['PartType0']:
+        raise ValueError(f"Property '{property}' not found in PartType0.")
+
+    data = np.array(f['PartType0'][property])
+
+    infinite = np.isinf(data)
+    nan = np.isnan(data)
+    # collapse to 1D mask per particle
+    if infinite.ndim > 1:
+        infinite = np.any(infinite, axis=1)
+    if nan.ndim > 1:
+        nan = np.any(nan, axis=1)
+
+    invalid = infinite | nan
+    valid = ~invalid
+    
+    coords = np.array(f['PartType0']['Coordinates'])
+
+    f.close()
+    
+    # bin into radial bins of size of bin in kpc
+    if (np.average(coords[:, 0]) > (boxsize/2 - 10)) and (np.average(coords[:, 0]) < (boxsize/2 + 10)):
+        coords -= boxsize / 2
+    radii = np.sqrt((coords[:, 0] * unit_length_in_kpc)**2 + (coords[:, 1] * unit_length_in_kpc)**2)
+    radii_bins = np.arange(0, np.max(radii[invalid]) + 2*bin, bin)
+    for b in radii_bins:
+        # get indices of invalid values in this bin
+        indices = np.where((radii >= b) & (radii < b + bin) & invalid)[0]
+        if len(indices) > 0:
+            vals = data[valid & (radii >= b) & (radii < b + bin)]
+            nvals = len(vals)
+            if nvals == 0:
+                raise Exception(f"No valid values found in bin {b} to calculate average for property '{property}'. Try increasing the bin size or check the data.")
+            elif nvals < 10:
+                print(f"Warning: Only {nvals} valid values found in bin {b} for property '{property}'. This may lead to inaccurate averages.")
+            # calculate the average of the valid values in this bin
+            avg_value = np.average(vals)
+            # replace invalid values with the average
+            data[indices] = avg_value
+    
+    update_snapshot_property(filepath, 'PartType0', property, data)
 
 
 def add_background_grid(filepath, disk_radius_in_kpc, disk_height_in_kpc, ndensity_per_cm3=1e-8, grid_size=32, boxsize=1000, margin=20, xHe=0.1):
