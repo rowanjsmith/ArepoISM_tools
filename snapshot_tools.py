@@ -125,6 +125,7 @@ class Snapshot:
             self.ntype1 = len(file['PartType1']['ParticleIDs'])
             self.coordinates_type1 = file['PartType1']['Coordinates'] << self.arepo_length
             self.velocity_type1 = file['PartType1']['Velocities'] << self.arepo_velocity
+            self.mass_type1 = file['PartType1']['Masses'] << self.arepo_mass
         else:
             self.has_type_1 = False
 
@@ -134,6 +135,7 @@ class Snapshot:
             self.ntype2 = len(file['PartType2']['ParticleIDs'])
             self.coordinates_type2 = file['PartType2']['Coordinates'] << self.arepo_length
             self.velocity_type2 = file['PartType2']['Velocities'] << self.arepo_velocity
+            self.mass_type2 = file['PartType2']['Masses'] << self.arepo_mass
         else:
             self.has_type_2 = False
 
@@ -143,6 +145,7 @@ class Snapshot:
             self.ntype3 = len(file['PartType3']['ParticleIDs'])
             self.coordinates_type3 = file['PartType3']['Coordinates'] << self.arepo_length
             self.velocity_type3 = file['PartType3']['Velocities'] << self.arepo_velocity
+            self.mass_type3 = file['PartType3']['Masses'] << self.arepo_mass
         else:
             self.has_type_3 = False
 
@@ -169,6 +172,7 @@ class Snapshot:
             self.ntype5 = len(file['PartType5']['ParticleIDs'])
             self.coordinates_type5 = file['PartType5']['Coordinates'] << self.arepo_length
             self.velocity_type5 = file['PartType5']['Velocities'] << self.arepo_velocity
+            self.mass_type5 = file['PartType5']['Masses'] << self.arepo_mass
         else:
             self.has_type_5 = False
 
