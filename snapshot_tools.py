@@ -380,6 +380,24 @@ def add_snapshot_property(filepath: str,
             print(f"{property} successfully added to {snap_group}.")
         else:
             raise Exception(f"{snap_group} not found in the HDF5 file.")
+
+
+def remove_snapshot_property(filepath: str,
+                             snap_group: str,
+                             property: str):
+    # write to hdf5 file
+    with h5py.File(filepath, 'r+') as f:
+        if snap_group in f.keys():
+            if property in f[snap_group]:
+                del f[snap_group][property]
+            else:
+                raise Exception(f"{property} not found in {snap_group}.")
+        else:
+            raise Exception(f"{snap_group} not found in the HDF5 file.")
+        if property in f[snap_group]:
+            print(f"Failed to remove {property} from {snap_group}.")
+        else:
+            print(f"{property} successfully removed from {snap_group}.")
         
 
 def stats_description(array):
