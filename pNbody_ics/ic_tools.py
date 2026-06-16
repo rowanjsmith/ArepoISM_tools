@@ -415,7 +415,7 @@ def add_chem_abundances(filepath, chem_abundances='NL97'):
     f.close()
 
 
-def add_magnetic_field(filepath, B0_in_gauss=1e-6, direction='toroidal'):
+def add_magnetic_field(filepath, B0_in_gauss=1e-12, direction='toroidal'):
     """
     Add magnetic field to the initial conditions file.
     """
@@ -424,8 +424,25 @@ def add_magnetic_field(filepath, B0_in_gauss=1e-6, direction='toroidal'):
 
     boxsize = f['Header'].attrs['BoxSize']
 
+    try:
+        arepo_length = f.get('Header')['UnitLength_in_cm']
+    except KeyError:
+        arepo_length = f['Parameters'].attrs['UnitLength_in_cm']
+    try:
+        arepo_mass = f.get('Header')['UnitMass_in_g']
+    except KeyError:
+        arepo_mass = f['Parameters'].attrs['UnitMass_in_g']
+    try:
+        arepo_velocity = f.get('Header')['UnitVelocity_in_cm_per_s']
+    except KeyError:
+        arepo_velocity = f['Parameters'].attrs['UnitVelocity_in_cm_per_s']
+
+    arepo_bfield = arepo_mass**0.5 * arepo_length**(-1.5) * arepo_velocity
+
+    B0 = B0_in_gauss / arepo_bfield
+
     # generate magnetic field
-    mag_field = generate_magnetic_field(f['PartType0']['Coordinates'], boxsize=boxsize, B0=B0_in_gauss, direction=direction)
+    mag_field = generate_magnetic_field(f['PartType0']['Coordinates'], boxsize=boxsize, B0=B0, direction=direction)
 
     if 'MagneticField' in f['PartType0']:
         update_snapshot_property(filepath, 'PartType0', 'MagneticField', mag_field)
@@ -437,71 +454,126 @@ def add_magnetic_field(filepath, B0_in_gauss=1e-6, direction='toroidal'):
 
 def generate_magnetic_field(points: np.ndarray,
                             boxsize: float,
-                            B0: float, 
-                            direction: str = 'toroidal') -> np.ndarray:
+                            B0: float,
+                            direction: str = 'toroidal',
+                            r_core_frac: float = 0.005) -> np.ndarray:
     """
-    Generates standard initial seed magnetic field configurations.
+    Generates magnetic seed field configurations.
 
     Parameters
     ----------
     points : np.ndarray
-        Position coordinates for which the magnetic field is to be defined on.
+        Coordinates where magnetic field is defined
+
     boxsize : float
-        Length of box
+        Simulation box size
+
     B0 : float
-        Magnitude of magnetic field
-    direction : str, optional
-        Direction of the magnetic field. Choose from 'toroidal', 'poloidal', 'x', 'y', or 'z'. 
-        Direction can be reversed by setting magnitude 'B0' to a negative value. Default is 'toroidal'
+        Magnetic field magnitude (code units)
 
-    Returns
-    -------
-    np.ndarray
-        Magnetic field defined on 'points'.
-    """    
+    direction : str
+        Choose from:
+            'toroidal'
+            'poloidal'
+            'x'
+            'y'
+            'z'
 
-    # input validation
+    r_core_frac : float
+        Softening core radius as fraction of box size.
+        Typical values:
+            0.005 - 0.02
+    """
+
+    # -----------------------------
+    # Input validation
+    # -----------------------------
     if not isinstance(B0, (int, float)):
-        raise Exception(f"'B0' should be a float or an integer, not {type(B0)}")
-    if not isinstance(direction, str):
-        raise Exception(f"'direction' should be a string, not {type(direction)}")
-    else:
-        direction = direction.strip().lower()
+        raise TypeError(
+            f"'B0' should be float/int, not {type(B0)}"
+        )
 
-    # generate magnetic seedfield
-    x, y, z = np.array(points).T
-    c = boxsize/2
+    if not isinstance(direction, str):
+        raise TypeError(
+            f"'direction' should be string, not {type(direction)}"
+        )
+
+    direction = direction.strip().lower()
+
+    # -----------------------------
+    # Coordinates
+    # -----------------------------
+    points = np.asarray(points)
+
+    x, y, z = points.T
+
+    c = boxsize / 2
+
+    # Detect already-centered coordinates
+    if x.min() < 0 and (-10 < np.mean(x) < 10):
+        xc = x
+        yc = y
+        print("Coordinates already centered.")
+    else:
+        xc = x - c
+        yc = y - c
+
+    # -----------------------------
+    # Toroidal field
+    # -----------------------------
     if direction == 'toroidal':
-        if x.min() < 0 and (np.average(x) > -10 and np.average(x) < 10):
-            r = np.sqrt(x**2 + y**2)
-            print('Coordinates already centered.')
-        else:
-            r = np.sqrt((x-c)**2 + (y-c)**2)
-            # print('Re-centering coordinates.')
-        r[r == 0] = 1e-10           # Prevent singularity at r = 0
-        bx = -B0 * (y-c)/r       # sin(arctan(y/x)) = y/sqrt((x**2 + y**2)
-        by = B0 * (x-c)/r        # cos(arctan(y/x)) = x/sqrt(x**2 + y**2)
-        Bx = np.full_like(x, bx)
-        By = np.full_like(y, by)
+
+        # Softened core radius
+        r_core = r_core_frac * boxsize
+
+        # Smooth cylindrical radius
+        r_soft = np.sqrt(xc**2 + yc**2 + r_core**2)
+
+        # Toroidal field
+        #
+        # B = B0 * e_phi
+        #
+        # softened near r=0
+        #
+        Bx = -B0 * yc / r_soft
+        By =  B0 * xc / r_soft
         Bz = np.zeros_like(z)
-    # TODO: make 'poloidal' generate an actual poloidal field
-    elif (direction == 'poloidal') or (direction == 'z'): # initial seed field for poloidal is same as z-direction?
+
+    # -----------------------------
+    # Poloidal / vertical field
+    # -----------------------------
+    elif direction in ['poloidal', 'z']:
+
         Bx = np.zeros_like(x)
         By = np.zeros_like(y)
         Bz = np.full_like(z, B0)
+
+    # -----------------------------
+    # Uniform x field
+    # -----------------------------
     elif direction == 'x':
+
         Bx = np.full_like(x, B0)
         By = np.zeros_like(y)
         Bz = np.zeros_like(z)
+
+    # -----------------------------
+    # Uniform y field
+    # -----------------------------
     elif direction == 'y':
+
         Bx = np.zeros_like(x)
         By = np.full_like(y, B0)
         Bz = np.zeros_like(z)
+
     else:
-        raise Exception("Invalid string given for 'direction'. Please choose from 'toroidal', 'poloidal', 'x', 'y', or 'z'.")
-    
-    B_field = np.array([Bx, By, Bz]).T
-    
+        raise ValueError(
+            "Invalid direction. Choose from "
+            "'toroidal', 'poloidal', 'x', 'y', 'z'"
+        )
+
+    B_field = np.column_stack((Bx, By, Bz))
+
     return B_field
 
 def disk_mask(coordinates, boxsize, unit_length_in_kpc, radii_in_kpc = [0, 15], half_heights_in_kpc = [0, 0.5]):
