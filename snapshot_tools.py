@@ -366,8 +366,16 @@ class Snapshot:
     
     def set_disk(self, radius = 10 * u.kpc, half_height = 1 * u.kpc, part_type=0):
 
-        radius = radius.to_value(self.arepo_length)
-        half_height = half_height.to_value(self.arepo_length)
+        if radius is None:
+            radius = self.boxsize/2
+        else:
+            radius = radius.to_value(self.arepo_length)
+        
+        if half_height is None:
+            half_height = self.boxsize/2
+        else:
+            half_height = half_height.to_value(self.arepo_length)
+            
         x, y, z = self.get_centered_coordinates(part_type=part_type).T
         r = np.sqrt(x*x + y*y)
         theta = np.arctan2(y,x)
