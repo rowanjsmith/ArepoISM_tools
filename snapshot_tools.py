@@ -9,6 +9,7 @@ Created on Wed Oct 30 12:42:00 2024
 """
 
 # Imports
+from matplotlib import path
 import numpy as np
 import astropy.units as u
 from astropy import constants
@@ -17,15 +18,22 @@ import matplotlib.colors as mcolors
 import matplotlib.animation as animation
 import h5py
 import warnings
+import time
+from pathlib import Path
+import os
+import re
 
 class Snapshot:
     def __init__(self, filepath):
         # Read snapshot
+        t0 = time.time()
         file = h5py.File(filepath, 'r')
 
         self.filepath = filepath
-        self.name = filepath.split('/')[-1][0:-5]
+        path = Path(self.filepath)
+        self.name = path.stem
         self.nsnap = self.name.split('_')[-1]
+        self.model = self.name.split('_')[0]
 
         # set units
         try:
@@ -43,25 +51,27 @@ class Snapshot:
         self.arepo_time = u.def_unit('arepo_time', self.arepo_length / self.arepo_velocity)
         self.arepo_density = u.def_unit('arepo_density', self.arepo_mass / self.arepo_length / self.arepo_length / self.arepo_length)
         self.arepo_energy = u.def_unit('arepo_energy', self.arepo_mass * self.arepo_velocity * self.arepo_velocity)
+        self.arepo_mag = u.def_unit('arepo_mag', (self.arepo_mass ** (1/2) / (self.arepo_time * (self.arepo_length ** (1/2)))))
 
         # get snapshot info
         self.time = (file['Header'].attrs['Time'] << self.arepo_time).to(u.Myr)
-        self.boxsize = file['Header'].attrs['BoxSize']
+        self.boxsize = file['Header'].attrs['BoxSize'][()]
         self.parameters = file['Parameters']
         self.config_flags = file['Config']
 
         # gas data
         if 'PartType0' in file:
             self.has_type_0 = True
-            self.n_type_0 = len(file['PartType0']['ParticleIDs'])
-            self.coordinates = file['PartType0']['Coordinates'] << self.arepo_length
-            self.density = file['PartType0']['Density'] << self.arepo_density
-            self.mass = file['PartType0']['Masses'] << self.arepo_mass
-            self.velocity = file['PartType0']['Velocities'] << self.arepo_velocity
-            
+            self.n_type_0 = file['PartType0']['ParticleIDs'].shape[0]
+
+            self.coordinates = file['PartType0']['Coordinates'][()] # << self.arepo_length
+            self.density = file['PartType0']['Density'][()] # << self.arepo_density
+            self.mass = file['PartType0']['Masses'][()] # << self.arepo_mass
+            self.velocity = file['PartType0']['Velocities'][()] # << self.arepo_velocity
+
             if 'MagneticField' in file['PartType0']:
                 self.has_mag_field = True
-                self.mag_field = file['PartType0']['MagneticField'] << (self.arepo_mass ** (1/2) / (self.arepo_time * (self.arepo_length ** (1/2))))
+                self.mag_field = file['PartType0']['MagneticField'][()] # << (self.arepo_mass ** (1/2) / (self.arepo_time * (self.arepo_length ** (1/2))))
                 try:
                     self.mag_field_divergence = file['PartType0']['MagneticFieldDivergence']
                     self.mag_field_divergence_alternative = file['PartType0']['MagneticFieldDivergenceAlternative']
@@ -75,17 +85,25 @@ class Snapshot:
 
             if 'InternalEnergy' in file['PartType0']:
                 self.has_internal_energy = True
-                self.internal_energy = file['PartType0']['InternalEnergy'] << self.arepo_energy/self.arepo_mass
+                self.internal_energy = file['PartType0']['InternalEnergy'][()] # << self.arepo_energy/self.arepo_mass
             else:
                 self.has_internal_energy = False
                 self.internal_energy = None
 
             if 'ChemicalAbundances' in file['PartType0']:
                 self.has_chemistry = True
-                self.xHe = 0.1 # Assumed in chemical network?
-                self.xH2 = np.transpose(file['PartType0']['ChemicalAbundances'])[0]
-                self.xHp = np.transpose(file['PartType0']['ChemicalAbundances'])[1]
-                self.xCO = np.transpose(file['PartType0']['ChemicalAbundances'])[2]
+                self.xHe = 0.1 # Assumed in chemical network
+                chem = file['PartType0']['ChemicalAbundances'][:]
+                if chem.shape[1] == 3:
+                    self.xH2, self.xHp, self.xCO = chem.T
+                    self.chem_model = 'NL97'
+                elif chem.shape[1] == 9:
+                    self.chem_model = 'Gong'
+                    self.xH2, self.xHp, self.xCp, self.xCH, self.xOH, self.xCO, self.xHCOp, self.xHep, self.xSip = chem.T
+                else:
+                    self.chem_model = 'Unknown'
+
+
             else:
                 self.has_chemistry = False
                 self.xHe = None
@@ -95,31 +113,40 @@ class Snapshot:
 
             if 'Potential' in file['PartType0']:
                 self.has_potential = True
-                self.potential = file['PartType0']['Potential'] << self.arepo_energy/self.arepo_mass
+                self.potential = file['PartType0']['Potential'][()] # << self.arepo_energy/self.arepo_mass
             else:
                 self.has_potential = False
                 self.potential = None
 
-            if ('TracerField' in file['PartType0']) or ('ZoomTracers' in file['PartType0']):
+            if ('TracerField' in file['PartType0']) or ('ZoomTracer' in file['PartType0']):
                 self.has_tracer_field = True
                 try:
-                    self.n_tracers = file['PartType0']['ZoomTracers'].shape[1]
-                    self.tracer_field = file['PartType0']['ZoomTracers'][()]  # Eagerly read (i.e. load into memory)
+                    self.tracer_field = file['PartType0']['ZoomTracer'][()]  # Eagerly read (i.e. load into memory)
+                    try:
+                        self.zoom_level = file['PartType0']['ZoomLevel'][()]
+                    except KeyError:
+                        self.zoom_level = None
                 except KeyError:
-                    self.n_tracers = file['PartType0']['TracerField'].shape[1]
                     self.tracer_field = file['PartType0']['TracerField'][()]  # Eagerly read
             else:
                 self.has_tracer_field = False
-                self.n_tracers = 0
                 self.tracer_field = None
+
+            if 'ZoomLevel' in file['PartType0']:
+                self.has_zoom_level = True
+                self.zoom_level = file['PartType0']['ZoomLevel'][()]
+            else:
+                self.has_zoom_level = False
+                self.zoom_level = None
 
             # get derived quantities
             self.ndensity = self.get_number_density()
-            self.temperature = self.get_temperature()
-            # use reasonable units for division to prevent overflow runtime warning
-            self.cell_volume = (self.mass.to_value(u.solMass) / self.density.to_value(u.solMass/u.pc**3)) << (u.pc**3)
-            self.effective_cell_radius = ((3 * self.cell_volume.to_value(u.pc**3) / (4 * np.pi)) ** (1/3)) << u.pc
 
+            self.temperature = self.get_temperature()
+
+            # use reasonable units for division to prevent overflow runtime warning
+            self.cell_volume = self.mass / self.density # << (self.arepo_length**3)
+            self.effective_cell_radius = ((3 * self.cell_volume / (4 * np.pi)) ** (1/3)) # << self.arepo_length
 
         else:
             self.has_type_0 = False
@@ -128,40 +155,40 @@ class Snapshot:
         # dark matter data
         if 'PartType1' in file:
             self.has_type_1 = True
-            self.n_type_1 = len(file['PartType1']['ParticleIDs'])
-            self.coordinates_type_1 = file['PartType1']['Coordinates'] << self.arepo_length
-            self.velocity_type_1 = file['PartType1']['Velocities'] << self.arepo_velocity
-            self.mass_type_1 = file['PartType1']['Masses'] << self.arepo_mass
+            self.n_type_1 = file['PartType1']['ParticleIDs'].shape[0]
+            self.coordinates_type_1 = file['PartType1']['Coordinates'] # << self.arepo_length
+            self.velocity_type_1 = file['PartType1']['Velocities'] # << self.arepo_velocity
+            self.mass_type_1 = file['PartType1']['Masses'] # << self.arepo_mass
         else:
             self.has_type_1 = False
 
         # disk data
         if 'PartType2' in file:
             self.has_type_2 = True
-            self.n_type_2 = len(file['PartType2']['ParticleIDs'])
-            self.coordinates_type_2 = file['PartType2']['Coordinates'] << self.arepo_length
-            self.velocity_type_2 = file['PartType2']['Velocities'] << self.arepo_velocity
-            self.mass_type_2 = file['PartType2']['Masses'] << self.arepo_mass
+            self.n_type_2 = file['PartType2']['ParticleIDs'].shape[0]
+            self.coordinates_type_2 = file['PartType2']['Coordinates'] # << self.arepo_length
+            self.velocity_type_2 = file['PartType2']['Velocities'] # << self.arepo_velocity
+            self.mass_type_2 = file['PartType2']['Masses'][()] # << self.arepo_mass
         else:
             self.has_type_2 = False
 
         # bulge data
         if 'PartType3' in file:
             self.has_type_3 = True
-            self.n_type_3 = len(file['PartType3']['ParticleIDs'])
-            self.coordinates_type_3 = file['PartType3']['Coordinates'] << self.arepo_length
-            self.velocity_type_3 = file['PartType3']['Velocities'] << self.arepo_velocity
-            self.mass_type_3 = file['PartType3']['Masses'] << self.arepo_mass
+            self.n_type_3 = file['PartType3']['ParticleIDs'].shape[0]
+            self.coordinates_type_3 = file['PartType3']['Coordinates'] # << self.arepo_length
+            self.velocity_type_3 = file['PartType3']['Velocities'] # << self.arepo_velocity
+            self.mass_type_3 = file['PartType3']['Masses'][()] # << self.arepo_mass
         else:
             self.has_type_3 = False
 
         # star data
         if 'PartType4' in file:
             self.has_type_4 = True
-            self.n_type_4 = len(file['PartType4']['ParticleIDs'])
-            self.coordinates_type_4 = file['PartType4']['Coordinates'] << self.arepo_length
-            self.velocity_type_4 = file['PartType4']['Velocities'] << self.arepo_velocity
-            self.mass_type_4 = file['PartType4']['Masses'] << self.arepo_mass
+            self.n_type_4 = file['PartType4']['ParticleIDs'].shape[0]
+            self.coordinates_type_4 = file['PartType4']['Coordinates'][()] # << self.arepo_length
+            self.velocity_type_4 = file['PartType4']['Velocities'] # << self.arepo_velocity
+            self.mass_type_4 = file['PartType4']['Masses'][()] # << self.arepo_mass
 
             if 'TracerField' in file['PartType4']:
                 self.has_tracer_field_type_4 = True
@@ -175,12 +202,15 @@ class Snapshot:
         # sink data
         if 'PartType5' in file:
             self.has_type_5 = True
-            self.n_type_5 = len(file['PartType5']['ParticleIDs'])
-            self.coordinates_type_5 = file['PartType5']['Coordinates'] << self.arepo_length
-            self.velocity_type_5 = file['PartType5']['Velocities'] << self.arepo_velocity
-            self.mass_type_5 = file['PartType5']['Masses'] << self.arepo_mass
+            self.n_type_5 = file['PartType5']['ParticleIDs'].shape[0]
+            self.coordinates_type_5 = file['PartType5']['Coordinates'][()] # << self.arepo_length
+            self.velocity_type_5 = file['PartType5']['Velocities'] # << self.arepo_velocity
+            self.mass_type_5 = file['PartType5']['Masses'] # << self.arepo_mass
         else:
             self.has_type_5 = False
+
+        t1 = time.time()
+        print(f"Time taken to read snapshot: {t1-t0:.2f} seconds")
 
         file.close()
     
@@ -213,11 +243,16 @@ class Snapshot:
             Number density :math:'n'.
 
         """
-        density = self.density.to_value(u.g/u.cm**3)
-        xHe = 0.1 # if (self.xHe is None) else self.xHe
-        ndensity = density/((1.0 + 4.0 * xHe) * 1.67262192369e-24) # constants.m_p.cgs.value
+        xHe = 0.1 if (self.xHe is None) else self.xHe
+        ndensity = self.density/((1.0 + 4.0 * xHe) * constants.m_p.to_value(self.arepo_mass))
+        if self.has_chemistry:
+            xTOT = 1.0 + self.xHp - self.xH2 + xHe
+        else:
+            warnings.warn('No chemistry data available. Temperature calculated assuming neutral atomic gas with 0.1 He/H.', UserWarning)
+            xTOT = 1.0 + 0.1
+        self.mean_molecular_weight = (1.0 + 4.0 * xHe) * constants.m_p.to_value(self.arepo_mass) / xTOT
 
-        return ndensity << (1/(u.cm**3))
+        return ndensity # << (1/(self.arepo_length**3))
     
     def get_temperature(self):
         """        
@@ -248,12 +283,12 @@ class Snapshot:
         else:
             warnings.warn('No chemistry data available. Temperature calculated assuming neutral atomic gas with 0.1 He/H.', UserWarning)
             xTOT = 1.0 + 0.1  # Default value if no chemistry data is available
-        nTOT = xTOT * self.ndensity.to_value(1/(u.cm**3))
-        mean_molecular_weight = self.density.to_value(u.g/(u.cm**3))/nTOT
-        # print(f"Mean Molecular Weight: \nMean: {np.mean((mean_molecular_weight/constants.m_p).decompose())}, \nMax: {np.max((mean_molecular_weight/constants.m_p).decompose())}, \nMin: {np.min((mean_molecular_weight/constants.m_p).decompose())}")
-        temperature = (2.0/3.0) * self.internal_energy.to_value(u.cm**2 / u.s**2) * mean_molecular_weight / constants.k_B.cgs.value
-        
-        return temperature << u.K
+        nTOT = xTOT * self.ndensity # .to_value(1/(u.cm**3))
+        mean_molecular_weight = self.density / nTOT
+        temperature = (2.0/3.0) * (self.internal_energy * mean_molecular_weight) / constants.k_B.to_value(self.arepo_energy/u.K)
+
+        return temperature # << u.K
+    
 
     def check_particle_coordinate_limits(self) -> bool:
         """
@@ -261,33 +296,33 @@ class Snapshot:
         """
         success = True
         if self.has_type_0:
-            if not np.all(np.logical_and(self.coordinates.to_value(self.arepo_length) >= 0, 
-                                         self.coordinates.to_value(self.arepo_length) <= self.boxsize)):
+            if not np.all(np.logical_and(self.coordinates >= 0, 
+                                         self.coordinates <= self.boxsize.to_value(self.arepo_length))):
                 warnings.warn('Type 0 particle coordinates are not within the simulation box.')
                 success = False
         if self.has_type_1:
-            if not np.all(np.logical_and(self.coordinates_type_1.to_value(self.arepo_length) >= 0, 
-                                         self.coordinates_type_1.to_value(self.arepo_length) <= self.boxsize)):
+            if not np.all(np.logical_and(self.coordinates_type_1 >= 0, 
+                                         self.coordinates_type_1 <= self.boxsize.to_value(self.arepo_length))):
                 warnings.warn('Type 1 particle coordinates are not within the simulation box.')
                 success = False
         if self.has_type_2:
-            if not np.all(np.logical_and(self.coordinates_type_2.to_value(self.arepo_length) >= 0, 
-                                         self.coordinates_type_2.to_value(self.arepo_length) <= self.boxsize)):
+            if not np.all(np.logical_and(self.coordinates_type_2 >= 0, 
+                                         self.coordinates_type_2 <= self.boxsize.to_value(self.arepo_length))):
                 warnings.warn('Type 2 particle coordinates are not within the simulation box.')
                 success = False
         if self.has_type_3:
-            if not np.all(np.logical_and(self.coordinates_type_3.to_value(self.arepo_length) >= 0, 
-                                         self.coordinates_type_3.to_value(self.arepo_length) <= self.boxsize)):
+            if not np.all(np.logical_and(self.coordinates_type_3 >= 0, 
+                                         self.coordinates_type_3 <= self.boxsize.to_value(self.arepo_length))):
                 warnings.warn('Type 3 particle coordinates are not within the simulation box.')
                 success = False
         if self.has_type_4:
-            if not np.all(np.logical_and(self.coordinates_type_4.to_value(self.arepo_length) >= 0, 
-                                         self.coordinates_type_4.to_value(self.arepo_length) <= self.boxsize)):
+            if not np.all(np.logical_and(self.coordinates_type_4 >= 0, 
+                                         self.coordinates_type_4 <= self.boxsize.to_value(self.arepo_length)    )):
                 warnings.warn('Type 4 particle coordinates are not within the simulation box.')
                 success = False
         if self.has_type_5:
-            if not np.all(np.logical_and(self.coordinates_type_5.to_value(self.arepo_length) >= 0, 
-                                         self.coordinates_type_5.to_value(self.arepo_length) <= self.boxsize)):
+            if not np.all(np.logical_and(self.coordinates_type_5 >= 0, 
+                                         self.coordinates_type_5 <= self.boxsize.to_value(self.arepo_length))):
                 warnings.warn('Type 5 particle coordinates are not within the simulation box.')
                 success = False
         if success:
@@ -313,33 +348,44 @@ class Snapshot:
             center = np.array([c.to_value(self.arepo_length) for c in center])
 
         if part_type == 0:
-            coordinates = (self.coordinates.to_value(self.arepo_length) - center) << self.arepo_length
+            coordinates = (self.coordinates - center) # << self.arepo_length
         elif part_type == 1:
-            coordinates = (self.coordinates_type_1.to_value(self.arepo_length) - center) << self.arepo_length
+            coordinates = (self.coordinates_type_1 - center) # << self.arepo_length
         elif part_type == 2:
-            coordinates = (self.coordinates_type_2.to_value(self.arepo_length) - center) << self.arepo_length
+            coordinates = (self.coordinates_type_2 - center) # << self.arepo_length
         elif part_type == 3:
-            coordinates = (self.coordinates_type_3.to_value(self.arepo_length) - center) << self.arepo_length
+            coordinates = (self.coordinates_type_3 - center) # << self.arepo_length
         elif part_type == 4:
-            coordinates = (self.coordinates_type_4.to_value(self.arepo_length) - center) << self.arepo_length
+            coordinates = (self.coordinates_type_4 - center) # << self.arepo_length
         elif part_type == 5:
-            coordinates = (self.coordinates_type_5.to_value(self.arepo_length) - center) << self.arepo_length
+            coordinates = (self.coordinates_type_5 - center) # << self.arepo_length
         else:
             raise ValueError('Invalid particle type. Choose from 0, 1, 2, 3, 4, or 5.')
 
         return coordinates
     
-    def set_disk(self, radius = 10 * u.kpc, half_height = 1 * u.kpc):
+    def set_disk(self, radius = 10 * u.kpc, half_height = 1 * u.kpc, part_type=0):
 
-        radius = radius.to_value(u.pc)
-        half_height = half_height.to_value(u.pc)
-        x, y, z = self.get_centered_coordinates().to_value(u.pc).T
+        radius = radius.to_value(self.arepo_length)
+        half_height = half_height.to_value(self.arepo_length)
+        x, y, z = self.get_centered_coordinates(part_type=part_type).T
         r = np.sqrt(x*x + y*y)
         theta = np.arctan2(y,x)
 
         disk = (r < radius) & (np.abs(z) < half_height)
 
         self.disk = disk
+
+    def set_box(self, xmax=10 * u.kpc, ymax=10 * u.kpc, zmax=10 * u.kpc, part_type=0):
+
+        xmax = xmax.to_value(self.arepo_length)
+        ymax = ymax.to_value(self.arepo_length)
+        zmax = zmax.to_value(self.arepo_length)
+        x, y, z = self.get_centered_coordinates(part_type=part_type).T
+
+        box = (np.abs(x) < xmax) & (np.abs(y) < ymax) & (np.abs(z) < zmax)
+
+        self.box = box
 
 
 def update_snapshot_property(filepath: str,
@@ -350,7 +396,7 @@ def update_snapshot_property(filepath: str,
     with h5py.File(filepath, 'r+') as f:
         if snap_group in f.keys():
             if property in f[snap_group]:
-                if not len(f[snap_group][property]) == len(data):
+                if not f[snap_group][property].shape[0] == data.shape[0]:
                     if snap_group == ('Config' or 'Header' or 'Parameters'):
                         warnings.warn(f"Existing {property} data and new {property} data have different lengths.", UserWarning)
                     else:
@@ -365,8 +411,6 @@ def update_snapshot_property(filepath: str,
                 else:
                     # Overwrite existing dataset with new data
                     f[snap_group][property][:] = data  # Modify in place
-
-                    # f.flush()
 
                     print(f"{property} successfully updated.")
             else:
@@ -384,7 +428,7 @@ def add_snapshot_property(filepath: str,
         if snap_group in f.keys():
 
             if snap_group[0:8] == 'PartType':
-                if len(data) != len(f.get(snap_group)['ParticleIDs']):
+                if data.shape[0] != f.get(snap_group)['ParticleIDs'].shape[0]:
                     warnings.warn(f"Length of {property} data does not match number of particles for {snap_group}.", UserWarning)
                     
             f[snap_group].create_dataset(property, data=data)
@@ -471,8 +515,6 @@ def print_snap_info(filepath: str):
                 except AttributeError:
                     print(f"\n{key} doesn't have keys")
 
-        print(stats_description(np.array(file['PartType0']['Masses'])))
-
         if (np.array(file['PartType0']['ParticleIDs']) == 0).any():
             print("PartType0 ParticleID is 0 at index: ", np.where(np.array(file['PartType0']['ParticleIDs']) == 0))
 
@@ -502,9 +544,6 @@ def print_snap_info(filepath: str):
         if (np.array(file['PartType0']['Masses']) < 0).any():
             print(f"PartType0 Mass is negative for {np.sum(np.where(np.array(file['PartType0']['Masses']) < 0))} cells.")
 
-        if (np.array(file['PartType0']['Masses']) > 0).any():
-            print(f"PartType0 Mass is positive for {np.sum(np.where(np.array(file['PartType0']['Masses']) > 0))} cells.")
-
         if (np.isnan(np.array(file['PartType0']['Masses']))).any():
             print(f"PartType0 Mass is NaN for {np.sum(np.where(np.isnan(np.array(file['PartType0']['Masses']))))} cells.")
 
@@ -512,3 +551,19 @@ def print_snap_info(filepath: str):
             print(f"PartType0 Mass is Inf for {np.sum(np.where(np.isinf(np.array(file['PartType0']['Masses']))))} cells.")
 
         file.close()
+
+def get_max_snapshot_number(rundir):
+
+    # Regex to capture numbers in filenames
+    pattern = re.compile(r"V\d+B?_(\d{3,4})\.hdf5")
+
+    if not os.path.isdir(rundir):
+        print(f"Directory {rundir} does not exist.")
+    
+    nums = []
+    for fname in os.listdir(rundir):
+        match = pattern.match(fname)
+        if match:
+            nums.append(int(match.group(1)))
+
+    return max(nums) if nums else None
