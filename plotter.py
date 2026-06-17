@@ -1922,7 +1922,7 @@ def stellar_mass_evolution(filepaths):
     stellar_masses = []
     for filepath in filepaths:
         with h5py.File(filepath, 'r') as file:
-            stellar_masses.append(np.sum(file['part_type4']['Masses']) * snap.arepo_mass.to(u.Msun))
+            stellar_masses.append(np.sum(file['PartType4']['Masses']) * snap.arepo_mass.to(u.Msun))
             times.append((file['Header'].attrs['Time']) * snap.arepo_time.to(u.Myr))
     
     plt.figure(figsize=(10, 6))
@@ -2177,12 +2177,12 @@ def magnetic_streamlines(snap,
                          vmax=None,
                          norm=None,
                          save_path=None):
-    """Plot velocity streamlines in the snapshot.
+    """Plot magnetic streamlines in the snapshot.
 
     Parameters
     ----------
     snap : Snapshot object
-        The snapshot for which to plot velocity streamlines.
+        The snapshot for which to plot magnetic streamlines.
     axis : str, optional
         The axis along which to plot the streamlines ('x', 'y', or 'z'), by default 'z'.
     save_path : str, optional
