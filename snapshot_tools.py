@@ -118,16 +118,30 @@ class Snapshot:
                 self.has_potential = False
                 self.potential = None
 
+            if 'PhotonRates' in file['PartType0']:
+                self.has_photon_rates = True
+                self.photon_rates = file['PartType0']['PhotonRates'][()] # << 1/(self.arepo_time)
+            else:
+                self.has_photon_rates = False
+                self.photon_rates = None
+
+            if 'PhotonFlux' in file['PartType0']:
+                self.has_photon_flux = True
+                self.photon_flux = file['PartType0']['PhotonFlux'][()] # << 1/(self.arepo_time)
+            else:
+                self.has_photon_flux = False
+                self.photon_flux = None
+
             if ('TracerField' in file['PartType0']) or ('ZoomTracer' in file['PartType0']):
                 self.has_tracer_field = True
                 try:
-                    self.tracer_field = file['PartType0']['ZoomTracer'][()]  # Eagerly read (i.e. load into memory)
+                    self.tracer_field = file['PartType0']['ZoomTracer'][()]
                     try:
                         self.zoom_level = file['PartType0']['ZoomLevel'][()]
                     except KeyError:
                         self.zoom_level = None
                 except KeyError:
-                    self.tracer_field = file['PartType0']['TracerField'][()]  # Eagerly read
+                    self.tracer_field = file['PartType0']['TracerField'][()]
             else:
                 self.has_tracer_field = False
                 self.tracer_field = None
@@ -245,12 +259,6 @@ class Snapshot:
         """
         xHe = 0.1 if (self.xHe is None) else self.xHe
         ndensity = self.density/((1.0 + 4.0 * xHe) * constants.m_p.to_value(self.arepo_mass))
-        if self.has_chemistry:
-            xTOT = 1.0 + self.xHp - self.xH2 + xHe
-        else:
-            warnings.warn('No chemistry data available. Temperature calculated assuming neutral atomic gas with 0.1 He/H.', UserWarning)
-            xTOT = 1.0 + 0.1
-        self.mean_molecular_weight = (1.0 + 4.0 * xHe) * constants.m_p.to_value(self.arepo_mass) / xTOT
 
         return ndensity # << (1/(self.arepo_length**3))
     
@@ -525,6 +533,9 @@ def print_snap_info(filepath: str):
 
         if (np.array(file['PartType0']['ParticleIDs']) == 0).any():
             print("PartType0 ParticleID is 0 at index: ", np.where(np.array(file['PartType0']['ParticleIDs']) == 0))
+
+        if (np.array(file['PartType4']['ParticleIDs']) == 0).any():
+            print("PartType4 ParticleID is 0 at index: ", np.where(np.array(file['PartType4']['ParticleIDs']) == 0))
 
         if (np.array(file['PartType0']['Masses']) == 0).any():
             print(f"PartType0 Mass is 0 for {np.sum(np.where(np.array(file['PartType0']['Masses']) == 0))} cells.")
